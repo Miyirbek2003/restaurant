@@ -1,0 +1,13 @@
+{
+  "name": "restaurant-management",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Multi-tenant Restaurant POS SaaS on Supabase",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "db:push": "supabase db push",
+    "db:reset": "supabase db reset",
+    "db:seed": "supabase db execute -f supabase/seed.sql"
+  }
+}
