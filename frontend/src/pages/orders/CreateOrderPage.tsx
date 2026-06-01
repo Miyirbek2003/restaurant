@@ -224,8 +224,82 @@ export function CreateOrderPage() {
 
   const productList = (products as ProductRow[] | undefined) ?? [];
 
+  const cartPanel = (options: { showActions: boolean; className?: string }) => (
+    <Card className={cn('space-y-4', options.className)}>
+      <h3 className="font-semibold">{t('orders.cart')}</h3>
+      {cart.length === 0 ? (
+        <p className="text-sm text-slate-500">{t('orders.cartEmptyHint')}</p>
+      ) : (
+        <ul className="space-y-3">
+          {cart.map((line) => (
+            <li key={line.product_id} className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{line.name}</p>
+                <p className="text-xs text-slate-500">
+                  {formatCurrency(line.price)} {t('orders.each')}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="touch-target rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  onClick={() => void updateQty(line.product_id, -1)}
+                  aria-label={t('orderDetail.decreaseQty')}
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <span className="w-6 text-center text-sm tabular-nums">{line.quantity}</span>
+                <button
+                  type="button"
+                  className="touch-target rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  onClick={() => void updateQty(line.product_id, 1)}
+                  aria-label={t('orderDetail.increaseQty')}
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {cart.length > 0 && (
+        <>
+          <hr className="border-slate-200 dark:border-slate-700" />
+          <div className="flex justify-between font-bold">
+            <span>{t('orders.subtotal')}</span>
+            <span className="tabular-nums">{formatCurrency(subtotal)}</span>
+          </div>
+        </>
+      )}
+      {options.showActions && (
+        <>
+          <p className="text-xs text-slate-500">{t('orders.stockHint')}</p>
+          <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              disabled={cart.length === 0}
+              loading={createOrder.isPending}
+              onClick={() => submit(false)}
+            >
+              {t('orders.saveDraft')}
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={cart.length === 0}
+              loading={createOrder.isPending}
+              onClick={() => submit(true)}
+            >
+              {t('orders.sendToKitchen')}
+            </Button>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+
   return (
-    <div className={cn('page-stack', cart.length > 0 && 'pb-40 lg:pb-0')}>
+    <div className={cn('page-stack', cart.length > 0 && 'pb-52 lg:pb-0')}>
       <div className="flex flex-wrap items-center gap-2 sm:gap-4">
         <Button variant="ghost" size="sm" onClick={() => navigate('/orders')}>
           <ArrowLeft className="h-4 w-4" /> {t('common.back')}
@@ -268,7 +342,14 @@ export function CreateOrderPage() {
             />
           </div>
 
+          {cartPanel({ showActions: true, className: 'lg:hidden' })}
+
           <ul className="space-y-2 lg:hidden">
+            {productList.length === 0 ? (
+              <li className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-700">
+                {t('orders.noProductsForOrder')}
+              </li>
+            ) : null}
             {productList.map((p) => {
               const inCart = cartQtyForProduct(cart, p.id);
               const outOfStock = p.stock_quantity <= 0;
@@ -338,65 +419,25 @@ export function CreateOrderPage() {
           </div>
         </div>
 
-        <Card className="hidden h-fit space-y-4 lg:sticky lg:top-6 lg:block">
-          <h3 className="font-semibold">{t('orders.cart')}</h3>
-          {cart.length === 0 ? (
-            <p className="text-sm text-slate-500">{t('orders.cartEmptyHint')}</p>
-          ) : (
-            <ul className="space-y-3">
-              {cart.map((line) => (
-                <li key={line.product_id} className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{line.name}</p>
-                    <p className="text-xs text-slate-500">
-                      {formatCurrency(line.price)} {t('orders.each')}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      onClick={() => void updateQty(line.product_id, -1)}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                    <span className="w-6 text-center text-sm">{line.quantity}</span>
-                    <button
-                      type="button"
-                      className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      onClick={() => void updateQty(line.product_id, 1)}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <hr className="border-slate-200 dark:border-slate-700" />
-          <div className="flex justify-between font-bold">
-            <span>{t('orders.subtotal')}</span>
-            <span>{formatCurrency(subtotal)}</span>
-          </div>
-          <p className="text-xs text-slate-500">{t('orders.stockHint')}</p>
-          <div className="flex flex-col gap-2">
-            <Button variant="secondary" disabled={cart.length === 0} loading={createOrder.isPending} onClick={() => submit(false)}>
-              {t('orders.saveDraft')}
-            </Button>
-            <Button disabled={cart.length === 0} loading={createOrder.isPending} onClick={() => submit(true)}>
-              {t('orders.sendToKitchen')}
-            </Button>
-          </div>
-        </Card>
+        {cartPanel({ showActions: true, className: 'hidden h-fit lg:sticky lg:top-6 lg:block' })}
       </div>
 
       {cart.length > 0 && (
-        <div className="fixed-bottom-bar">
+        <div className="fixed-bottom-bar lg:hidden">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t('orders.cart')}</p>
+          <ul className="mb-3 max-h-36 space-y-2 overflow-y-auto overscroll-contain">
+            {cart.map((line) => (
+              <li key={line.product_id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 flex-1 truncate">
+                  {line.quantity}× {line.name}
+                </span>
+                <span className="shrink-0 tabular-nums">{formatCurrency(line.price * line.quantity)}</span>
+              </li>
+            ))}
+          </ul>
           <div className="mb-2 flex items-center justify-between font-bold">
-            <span>
-              {t('orders.cart')} ({cart.length})
-            </span>
-            <span>{formatCurrency(subtotal)}</span>
+            <span>{t('orders.subtotal')}</span>
+            <span className="tabular-nums">{formatCurrency(subtotal)}</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Button

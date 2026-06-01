@@ -165,6 +165,7 @@ export const ru = {
     takeawayNoTable: 'С собой (без стола)',
     tableOption: '{name} — {status} ({n} мест)',
     cartEmptyHint: 'Нажмите на блюда, чтобы добавить',
+    noProductsForOrder: 'Нет блюд в меню. Добавьте позиции в разделе «Меню».',
     stockAskedFor: '{name}: доступно {available} (запрошено {requested}). {notified}',
     stockWarehouseSingle: '{name}: на складе только {available}. {notified}',
     stockWarehouseMultiple: '{n} позиций нет на складе. {notified}',
