@@ -274,10 +274,10 @@ export function CreateOrderPage() {
       {options.showActions && (
         <>
           <p className="text-xs text-slate-500">{t('orders.stockHint')}</p>
-          <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+          <div className="flex flex-col gap-2 lg:flex-col">
             <Button
               variant="secondary"
-              className="flex-1"
+              className="w-full"
               disabled={cart.length === 0}
               loading={createOrder.isPending}
               onClick={() => submit(false)}
@@ -285,7 +285,7 @@ export function CreateOrderPage() {
               {t('orders.saveDraft')}
             </Button>
             <Button
-              className="flex-1"
+              className="w-full"
               disabled={cart.length === 0}
               loading={createOrder.isPending}
               onClick={() => submit(true)}
@@ -298,8 +298,32 @@ export function CreateOrderPage() {
     </Card>
   );
 
+  const mobileCartActions =
+    cart.length > 0 ? (
+      <div className="flex flex-col gap-2 lg:hidden">
+        <p className="text-xs text-slate-500">{t('orders.stockHint')}</p>
+        <Button
+          variant="secondary"
+          className="w-full"
+          disabled={cart.length === 0}
+          loading={createOrder.isPending}
+          onClick={() => submit(false)}
+        >
+          {t('orders.saveDraft')}
+        </Button>
+        <Button
+          className="w-full"
+          disabled={cart.length === 0}
+          loading={createOrder.isPending}
+          onClick={() => submit(true)}
+        >
+          {t('orders.sendToKitchen')}
+        </Button>
+      </div>
+    ) : null;
+
   return (
-    <div className="page-stack">
+    <div className={cn('page-stack', cart.length > 0 && 'pb-4 lg:pb-0')}>
       <div className="flex flex-wrap items-center gap-2 sm:gap-4">
         <Button variant="ghost" size="sm" onClick={() => navigate('/orders')}>
           <ArrowLeft className="h-4 w-4" /> {t('common.back')}
@@ -331,12 +355,6 @@ export function CreateOrderPage() {
               placeholder={t('orders.orderNotesPlaceholder')}
             />
           </Card>
-
-          {cartPanel({
-            showActions: true,
-            className:
-              'lg:hidden sticky top-14 z-10 max-h-[min(45vh,22rem)] overflow-y-auto overscroll-contain',
-          })}
 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -386,6 +404,9 @@ export function CreateOrderPage() {
             })}
           </ul>
 
+          {cartPanel({ showActions: false, className: 'lg:hidden' })}
+          {mobileCartActions}
+
           <div className="scroll-touch hidden rounded-xl border border-slate-200 dark:border-slate-800 lg:block">
             <table className="table-compact min-w-[560px]">
               <thead>
@@ -431,7 +452,7 @@ export function CreateOrderPage() {
 
         {cartPanel({
           showActions: true,
-          className: 'hidden h-fit lg:sticky lg:top-6 lg:block',
+          className: 'hidden h-fit space-y-4 lg:sticky lg:top-6 lg:block',
         })}
       </div>
     </div>
