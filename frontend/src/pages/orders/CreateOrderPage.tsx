@@ -299,7 +299,7 @@ export function CreateOrderPage() {
   );
 
   return (
-    <div className={cn('page-stack', cart.length > 0 && 'pb-52 lg:pb-0')}>
+    <div className="page-stack">
       <div className="flex flex-wrap items-center gap-2 sm:gap-4">
         <Button variant="ghost" size="sm" onClick={() => navigate('/orders')}>
           <ArrowLeft className="h-4 w-4" /> {t('common.back')}
@@ -332,6 +332,12 @@ export function CreateOrderPage() {
             />
           </Card>
 
+          {cartPanel({
+            showActions: true,
+            className:
+              'lg:hidden sticky top-14 z-10 max-h-[min(45vh,22rem)] overflow-y-auto overscroll-contain',
+          })}
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
@@ -341,8 +347,6 @@ export function CreateOrderPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-
-          {cartPanel({ showActions: true, className: 'lg:hidden' })}
 
           <ul className="space-y-2 lg:hidden">
             {productList.length === 0 ? (
@@ -363,10 +367,16 @@ export function CreateOrderPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{p.name}</p>
                     <p className="text-xs text-slate-500">
-                      {p.categories?.name} · {formatCurrency(Number(p.price))} · {t('orders.stockCol')}{' '}
-                      {p.stock_quantity}
-                      {inCart > 0 ? ` · ${t('orders.inCart', { n: inCart })}` : ''}
+                      {p.categories?.name} · {formatCurrency(Number(p.price))}
                     </p>
+                    <p className="text-xs text-slate-500">
+                      {t('orders.stockCol')} {p.stock_quantity}
+                    </p>
+                    {inCart > 0 && (
+                      <p className="text-xs font-medium text-primary-600 dark:text-primary-400">
+                        {t('orders.inCart', { n: inCart })}
+                      </p>
+                    )}
                   </div>
                   <Button size="sm" disabled={outOfStock || atLimit} onClick={() => void tryAddToCart(p)}>
                     {t('orders.addToCart')}
@@ -419,41 +429,11 @@ export function CreateOrderPage() {
           </div>
         </div>
 
-        {cartPanel({ showActions: true, className: 'hidden h-fit lg:sticky lg:top-6 lg:block' })}
+        {cartPanel({
+          showActions: true,
+          className: 'hidden h-fit lg:sticky lg:top-6 lg:block',
+        })}
       </div>
-
-      {cart.length > 0 && (
-        <div className="fixed-bottom-bar lg:hidden">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t('orders.cart')}</p>
-          <ul className="mb-3 max-h-36 space-y-2 overflow-y-auto overscroll-contain">
-            {cart.map((line) => (
-              <li key={line.product_id} className="flex items-center justify-between gap-2 text-sm">
-                <span className="min-w-0 flex-1 truncate">
-                  {line.quantity}× {line.name}
-                </span>
-                <span className="shrink-0 tabular-nums">{formatCurrency(line.price * line.quantity)}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mb-2 flex items-center justify-between font-bold">
-            <span>{t('orders.subtotal')}</span>
-            <span className="tabular-nums">{formatCurrency(subtotal)}</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              variant="secondary"
-              disabled={cart.length === 0}
-              loading={createOrder.isPending}
-              onClick={() => submit(false)}
-            >
-              {t('orders.saveDraft')}
-            </Button>
-            <Button disabled={cart.length === 0} loading={createOrder.isPending} onClick={() => submit(true)}>
-              {t('orders.sendToKitchen')}
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
