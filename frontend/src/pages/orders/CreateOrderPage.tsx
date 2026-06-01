@@ -300,30 +300,36 @@ export function CreateOrderPage() {
 
   const mobileCartActions =
     cart.length > 0 ? (
-      <div className="flex flex-col gap-2 lg:hidden">
+      <div className="fixed-bottom-bar space-y-2">
+        <div className="flex items-center justify-between text-sm">
+          <span className="font-medium">{t('orders.subtotal')}</span>
+          <span className="font-bold tabular-nums">{formatCurrency(subtotal)}</span>
+        </div>
         <p className="text-xs text-slate-500">{t('orders.stockHint')}</p>
-        <Button
-          variant="secondary"
-          className="w-full"
-          disabled={cart.length === 0}
-          loading={createOrder.isPending}
-          onClick={() => submit(false)}
-        >
-          {t('orders.saveDraft')}
-        </Button>
-        <Button
-          className="w-full"
-          disabled={cart.length === 0}
-          loading={createOrder.isPending}
-          onClick={() => submit(true)}
-        >
-          {t('orders.sendToKitchen')}
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            variant="secondary"
+            className="w-full"
+            disabled={cart.length === 0}
+            loading={createOrder.isPending}
+            onClick={() => submit(false)}
+          >
+            {t('orders.saveDraft')}
+          </Button>
+          <Button
+            className="w-full"
+            disabled={cart.length === 0}
+            loading={createOrder.isPending}
+            onClick={() => submit(true)}
+          >
+            {t('orders.sendToKitchen')}
+          </Button>
+        </div>
       </div>
     ) : null;
 
   return (
-    <div className={cn('page-stack', cart.length > 0 && 'pb-4 lg:pb-0')}>
+    <div className={cn('page-stack', cart.length > 0 && 'pb-44 lg:pb-0')}>
       <div className="flex flex-wrap items-center gap-2 sm:gap-4">
         <Button variant="ghost" size="sm" onClick={() => navigate('/orders')}>
           <ArrowLeft className="h-4 w-4" /> {t('common.back')}
@@ -405,7 +411,6 @@ export function CreateOrderPage() {
           </ul>
 
           {cartPanel({ showActions: false, className: 'lg:hidden' })}
-          {mobileCartActions}
 
           <div className="scroll-touch hidden rounded-xl border border-slate-200 dark:border-slate-800 lg:block">
             <table className="table-compact min-w-[560px]">
@@ -455,6 +460,7 @@ export function CreateOrderPage() {
           className: 'hidden h-fit space-y-4 lg:sticky lg:top-6 lg:block',
         })}
       </div>
+      {mobileCartActions}
     </div>
   );
 }
