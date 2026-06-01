@@ -7,10 +7,47 @@ import { fetchMyStaffId } from '@/lib/staffInvite';
 import {
   validateOrderStock,
   deductOrderStock,
+  restoreOrderStock,
   updateTableStatus,
   type StockFailure,
 } from '@/lib/stock';
+import { canEditOrderItems, orderStockWasDeducted } from '@/lib/orderEdit';
+import { assertTableAvailableForNewOrder } from '@/lib/tableOrder';
+import {
+  buildOrderItemSaveOps,
+  stockDeltasFromOps,
+  stockFailureError,
+  type DraftOrderLine,
+} from '@/lib/orderItemSave';
 import type { OrderStatus } from '@/types';
+
+function invalidateOrderQueries(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ['orders'] });
+  void qc.invalidateQueries({ queryKey: ['order'] });
+  void qc.invalidateQueries({ queryKey: ['kitchen-queue'] });
+  void qc.invalidateQueries({ queryKey: ['tables-with-waiters'] });
+  void qc.invalidateQueries({ queryKey: ['products'] });
+  void qc.invalidateQueries({ queryKey: ['inventory_items'] });
+  void qc.invalidateQueries({ queryKey: ['warehouse-product-ids'] });
+  void qc.invalidateQueries({ queryKey: ['stock-alerts'] });
+  void qc.invalidateQueries({ queryKey: ['dashboard'] });
+}
+
+async function markOrderStockDeducted(orderId: string) {
+  const { error } = await supabase.from('orders').update({ stock_deducted: true }).eq('id', orderId);
+  if (error) throw error;
+}
+
+async function deductOrderLines(lines: { product_id: string; quantity: number }[]) {
+  if (lines.length === 0) return;
+  const failures = await validateOrderStock(lines);
+  if (failures.length > 0) {
+    const err = new Error('INSUFFICIENT_STOCK') as Error & { stockFailures?: StockFailure[] };
+    err.stockFailures = failures;
+    throw err;
+  }
+  await deductOrderStock(lines);
+}
 
 const orderSelect = `
   *,
@@ -104,6 +141,10 @@ export function useCreateOrder() {
       });
       if (numErr) throw numErr;
 
+      if (body.table_id) {
+        await assertTableAvailableForNewOrder(body.table_id);
+      }
+
       const { data, error } = await supabase
         .from('orders')
         .insert({
@@ -133,6 +174,35 @@ export function useCreateOrder() {
   });
 }
 
+async function fetchOrderForEdit(orderId: string) {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, status, sent_to_kitchen_at, stock_deducted')
+    .eq('id', orderId)
+    .single();
+  if (error) throw error;
+  if (!canEditOrderItems(data.status as OrderStatus)) {
+    throw new Error('ORDER_NOT_EDITABLE');
+  }
+  return data;
+}
+
+async function applyStockDelta(
+  productId: string,
+  delta: number,
+  stockDeducted: boolean,
+): Promise<StockFailure[] | null> {
+  if (delta === 0 || !stockDeducted) return null;
+  if (delta > 0) {
+    const failures = await validateOrderStock([{ product_id: productId, quantity: delta }]);
+    if (failures.length > 0) return failures;
+    await deductOrderStock([{ product_id: productId, quantity: delta }]);
+    return null;
+  }
+  await restoreOrderStock([{ product_id: productId, quantity: -delta }]);
+  return null;
+}
+
 export function useAddOrderItem() {
   const restaurantId = useRestaurantId();
   const qc = useQueryClient();
@@ -147,9 +217,44 @@ export function useAddOrderItem() {
       productId: string;
       quantity: number;
     }) => {
+      const order = await fetchOrderForEdit(orderId);
+      const stockDeducted = orderStockWasDeducted(order);
+
+      const { data: existing } = await supabase
+        .from('order_items')
+        .select('id, quantity')
+        .eq('order_id', orderId)
+        .eq('product_id', productId)
+        .order('created_at')
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        const nextQty = existing.quantity + quantity;
+        const failures = await applyStockDelta(productId, quantity, stockDeducted);
+        if (failures?.length) {
+          const err = new Error('INSUFFICIENT_STOCK') as Error & { stockFailures?: StockFailure[] };
+          err.stockFailures = failures;
+          throw err;
+        }
+        const { error } = await supabase
+          .from('order_items')
+          .update({ quantity: nextQty })
+          .eq('id', existing.id);
+        if (error) throw error;
+        return;
+      }
+
+      const failures = await applyStockDelta(productId, quantity, stockDeducted);
+      if (failures?.length) {
+        const err = new Error('INSUFFICIENT_STOCK') as Error & { stockFailures?: StockFailure[] };
+        err.stockFailures = failures;
+        throw err;
+      }
+
       const { data: product, error: pErr } = await supabase
         .from('products')
-        .select('price, tax_rate')
+        .select('price, tax_rate, name')
         .eq('id', productId)
         .single();
       if (pErr) throw pErr;
@@ -158,13 +263,64 @@ export function useAddOrderItem() {
         restaurant_id: restaurantId!,
         order_id: orderId,
         product_id: productId,
+        product_name: product.name,
         quantity,
         unit_price: product.price,
         tax_rate: product.tax_rate,
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['orders'] }),
+    onSuccess: () => invalidateOrderQueries(qc),
+  });
+}
+
+export function useUpdateOrderItemQuantity() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      orderId,
+      itemId,
+      quantity,
+    }: {
+      orderId: string;
+      itemId: string;
+      quantity: number;
+    }) => {
+      const order = await fetchOrderForEdit(orderId);
+      const stockDeducted = orderStockWasDeducted(order);
+
+      const { data: item, error: iErr } = await supabase
+        .from('order_items')
+        .select('id, product_id, quantity')
+        .eq('id', itemId)
+        .eq('order_id', orderId)
+        .single();
+      if (iErr) throw iErr;
+
+      if (quantity <= 0) {
+        if (stockDeducted && item.product_id) {
+          await restoreOrderStock([{ product_id: item.product_id, quantity: item.quantity }]);
+        }
+        const { error } = await supabase.from('order_items').delete().eq('id', itemId);
+        if (error) throw error;
+        return;
+      }
+
+      const delta = quantity - item.quantity;
+      if (item.product_id) {
+        const failures = await applyStockDelta(item.product_id, delta, stockDeducted);
+        if (failures?.length) {
+          const err = new Error('INSUFFICIENT_STOCK') as Error & { stockFailures?: StockFailure[] };
+          err.stockFailures = failures;
+          throw err;
+        }
+      }
+
+      const { error } = await supabase.from('order_items').update({ quantity }).eq('id', itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateOrderQueries(qc),
   });
 }
 
@@ -197,18 +353,117 @@ export function useSendToKitchen() {
 
   return useMutation({
     mutationFn: async (orderId: string) => {
-      const { data, error } = await supabase
-        .from('orders')
-        .update({ status: 'NEW', sent_to_kitchen_at: new Date().toISOString() })
-        .eq('id', orderId)
-        .select(orderSelect)
-        .single();
+      const { data, error } = await supabase.rpc('send_order_to_kitchen', { p_order_id: orderId });
       if (error) throw error;
-      return data;
+
+      const result = data as { ok?: boolean; failures?: StockFailure[] } | null;
+      if (result?.ok === false) {
+        const failures = result.failures ?? [];
+        if (failures.length > 0) throw stockFailureError(failures);
+        throw new Error('INSUFFICIENT_STOCK');
+      }
+
+      return orderId;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['orders'] });
-      qc.invalidateQueries({ queryKey: ['kitchen-queue'] });
+    onSuccess: (orderId) => {
+      void qc.invalidateQueries({ queryKey: ['orders'] });
+      void qc.invalidateQueries({ queryKey: ['kitchen-queue'] });
+      void qc.invalidateQueries({ queryKey: ['order', orderId] });
+      void qc.invalidateQueries({ queryKey: ['products'] });
+      void qc.invalidateQueries({ queryKey: ['inventory_items'] });
+    },
+  });
+}
+
+export function useSaveOrderItems() {
+  const restaurantId = useRestaurantId();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      orderId,
+      original,
+      draft,
+    }: {
+      orderId: string;
+      original: DraftOrderLine[];
+      draft: DraftOrderLine[];
+    }) => {
+      const order = await fetchOrderForEdit(orderId);
+      const stockDeducted = orderStockWasDeducted(order);
+      const ops = buildOrderItemSaveOps(original, draft);
+      if (ops.length === 0) return;
+
+      if (stockDeducted) {
+        const deltas = stockDeltasFromOps(ops);
+        const toDeduct = deltas.filter((d) => d.delta > 0).map((d) => ({
+          product_id: d.product_id,
+          quantity: d.delta,
+        }));
+        const toRestore = deltas
+          .filter((d) => d.delta < 0)
+          .map((d) => ({ product_id: d.product_id, quantity: -d.delta }));
+
+        if (toDeduct.length > 0) {
+          const failures = await validateOrderStock(toDeduct);
+          if (failures.length > 0) throw stockFailureError(failures);
+          await deductOrderStock(toDeduct);
+        }
+        if (toRestore.length > 0) await restoreOrderStock(toRestore);
+      }
+
+      for (const op of ops) {
+        if (op.type === 'delete') {
+          const { error } = await supabase.from('order_items').delete().eq('id', op.itemId);
+          if (error) throw error;
+          continue;
+        }
+        if (op.type === 'update') {
+          if (op.toQty <= 0) {
+            const { error } = await supabase.from('order_items').delete().eq('id', op.itemId);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase
+              .from('order_items')
+              .update({ quantity: op.toQty })
+              .eq('id', op.itemId);
+            if (error) throw error;
+          }
+          continue;
+        }
+        if (op.type === 'insert') {
+          const { data: existing } = await supabase
+            .from('order_items')
+            .select('id, quantity')
+            .eq('order_id', orderId)
+            .eq('product_id', op.productId)
+            .limit(1)
+            .maybeSingle();
+
+          if (existing) {
+            const { error } = await supabase
+              .from('order_items')
+              .update({ quantity: existing.quantity + op.quantity })
+              .eq('id', existing.id);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase.from('order_items').insert({
+              restaurant_id: restaurantId!,
+              order_id: orderId,
+              product_id: op.productId,
+              product_name: op.product_name,
+              quantity: op.quantity,
+              unit_price: op.unit_price,
+              tax_rate: op.tax_rate,
+            });
+            if (error) throw error;
+          }
+        }
+      }
+    },
+    onSuccess: (_, { orderId }) => {
+      invalidateOrderQueries(qc);
+      void qc.invalidateQueries({ queryKey: ['order', orderId] });
     },
   });
 }
@@ -216,11 +471,25 @@ export function useSendToKitchen() {
 export function useRemoveOrderItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (itemId: string) => {
+    mutationFn: async ({ itemId, orderId }: { itemId: string; orderId: string }) => {
+      const order = await fetchOrderForEdit(orderId);
+      const stockDeducted = orderStockWasDeducted(order);
+
+      const { data: item, error: iErr } = await supabase
+        .from('order_items')
+        .select('product_id, quantity')
+        .eq('id', itemId)
+        .single();
+      if (iErr) throw iErr;
+
+      if (stockDeducted && item.product_id) {
+        await restoreOrderStock([{ product_id: item.product_id, quantity: item.quantity }]);
+      }
+
       const { error } = await supabase.from('order_items').delete().eq('id', itemId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['orders'] }),
+    onSuccess: () => invalidateOrderQueries(qc),
   });
 }
 
@@ -261,17 +530,23 @@ export function useCreateOrderWithItems() {
       }
 
       const stockLines = body.items.map((i) => ({ product_id: i.product_id, quantity: i.quantity }));
-      const failures = await validateOrderStock(stockLines);
-      if (failures.length > 0) {
-        const err = new Error('INSUFFICIENT_STOCK') as Error & { stockFailures?: StockFailure[] };
-        err.stockFailures = failures;
-        throw err;
+      if (stockLines.length > 0) {
+        const failures = await validateOrderStock(stockLines);
+        if (failures.length > 0) {
+          const err = new Error('INSUFFICIENT_STOCK') as Error & { stockFailures?: StockFailure[] };
+          err.stockFailures = failures;
+          throw err;
+        }
       }
 
       const { data: orderNum, error: numErr } = await supabase.rpc('next_order_number', {
         p_restaurant_id: restaurantId!,
       });
       if (numErr) throw numErr;
+
+      if (body.table_id) {
+        await assertTableAvailableForNewOrder(body.table_id);
+      }
 
       const status = body.sendToKitchen ? 'NEW' : 'DRAFT';
 
@@ -294,14 +569,10 @@ export function useCreateOrderWithItems() {
         await updateTableStatus(body.table_id, 'OCCUPIED');
       }
 
-      if (body.sendToKitchen) {
-        await deductOrderStock(stockLines);
-      }
-
       for (const line of body.items) {
         const { data: product, error: pErr } = await supabase
           .from('products')
-          .select('price, tax_rate')
+          .select('price, tax_rate, name')
           .eq('id', line.product_id)
           .single();
         if (pErr) throw pErr;
@@ -310,12 +581,16 @@ export function useCreateOrderWithItems() {
           restaurant_id: restaurantId!,
           order_id: order.id,
           product_id: line.product_id,
+          product_name: product.name,
           quantity: line.quantity,
           unit_price: product.price,
           tax_rate: product.tax_rate,
         });
         if (iErr) throw iErr;
       }
+
+      await deductOrderLines(stockLines);
+      await markOrderStockDeducted(order.id);
 
       const { data: full, error: fErr } = await supabase
         .from('orders')
@@ -325,14 +600,7 @@ export function useCreateOrderWithItems() {
       if (fErr) throw fErr;
       return full;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['orders'] });
-      qc.invalidateQueries({ queryKey: ['tables'] });
-      qc.invalidateQueries({ queryKey: ['tables-with-waiters'] });
-      qc.invalidateQueries({ queryKey: ['kitchen-queue'] });
-      qc.invalidateQueries({ queryKey: ['products'] });
-      qc.invalidateQueries({ queryKey: ['stock-alerts'] });
-    },
+    onSuccess: () => invalidateOrderQueries(qc),
   });
 }
 

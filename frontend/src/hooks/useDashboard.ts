@@ -74,7 +74,7 @@ export function useDashboard() {
           .gte('created_at', today),
         supabase
           .from('order_items')
-          .select('quantity, products(name)')
+          .select('quantity, product_name, products(name)')
           .eq('restaurant_id', restaurantId!)
           .limit(500),
       ]);
@@ -85,8 +85,10 @@ export function useDashboard() {
       const tables = tablesRes.data ?? [];
       const sellerMap = new Map<string, number>();
       for (const item of orderItemsRes.data ?? []) {
-        const prod = item.products as { name: string } | { name: string }[] | null;
-        const name = Array.isArray(prod) ? prod[0]?.name : prod?.name ?? 'Unknown';
+        const row = item as { product_name?: string; products?: { name: string } | { name: string }[] | null };
+        const prod = row.products;
+        const fromJoin = Array.isArray(prod) ? prod[0]?.name : prod?.name;
+        const name = row.product_name?.trim() || fromJoin || 'Unknown';
         sellerMap.set(name, (sellerMap.get(name) ?? 0) + item.quantity);
       }
       const bestSellers = [...sellerMap.entries()]

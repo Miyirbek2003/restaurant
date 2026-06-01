@@ -10,6 +10,7 @@ import { usePreviewInvite } from '@/hooks/useStaffInvites';
 import { useAuth } from '@/contexts/AuthContext';
 import { getHomeForRole } from '@/lib/roles';
 import { getErrorMessage } from '@/lib/errors';
+import { t } from '@/i18n';
 import {
   completeWaiterInvite,
   registerStaffFromInvite,
@@ -52,14 +53,14 @@ export function JoinStaffPage() {
 
     const inviteCode = code.trim().toUpperCase();
     if (!inviteCode) {
-      setStatus({ type: 'error', title: 'Invite code required' });
+      setStatus({ type: 'error', title: t('join.codeRequired') });
       return;
     }
     if (!preview) {
       setStatus({
         type: 'error',
-        title: 'Invalid invite',
-        message: 'Check the code with your manager or request a new link.',
+        title: t('join.invalidInvite'),
+        message: t('join.invalidInviteMsg'),
       });
       return;
     }
@@ -80,7 +81,7 @@ export function JoinStaffPage() {
               password,
             });
             if (signInErr) {
-              throw new Error('This email already has an account. Sign in, then open your invite link again.');
+              throw new Error(t('join.emailExists'));
             }
             await finishWaiterJoin(inviteCode);
             return;
@@ -92,9 +93,8 @@ export function JoinStaffPage() {
           savePendingWaiterInvite({ code: inviteCode, name, phone });
           setStatus({
             type: 'info',
-            title: 'Confirm your email',
-            message:
-              'After you confirm, sign in with the same email and password. Your invite will be applied automatically.',
+            title: t('join.confirmEmail'),
+            message: t('join.confirmEmailMsg'),
           });
           return;
         }
@@ -106,15 +106,18 @@ export function JoinStaffPage() {
       const result = await registerStaffFromInvite(inviteCode, name, phone);
       setStatus({
         type: 'success',
-        title: 'You are on the team!',
-        message: `${result?.name ?? name} was added to ${preview.restaurant_name} as Kitchen staff. Kitchen screen is used from the manager login.`,
+        title: t('join.onTeam'),
+        message: t('join.kitchenAdded', {
+          name: result?.name ?? name,
+          restaurant: preview.restaurant_name,
+        }),
       });
       setName('');
       setPhone('');
     } catch (err) {
       setStatus({
         type: 'error',
-        title: 'Could not register',
+        title: t('join.registerFailed'),
         message: getErrorMessage(err),
       });
     } finally {
@@ -134,7 +137,7 @@ export function JoinStaffPage() {
       <Card className="w-full max-w-md space-y-6">
         <div className="flex items-center gap-2">
           <UtensilsCrossed className="h-8 w-8 text-primary-500" />
-          <h1 className="text-xl font-bold">Join your restaurant</h1>
+          <h1 className="text-xl font-bold">{t('join.title')}</h1>
         </div>
 
         {status && (
@@ -143,39 +146,47 @@ export function JoinStaffPage() {
             {status.message && <p className="mt-2">{status.message}</p>}
             {status.type === 'info' && (
               <Link to="/login" className="mt-3 inline-block font-medium text-primary-600 hover:underline">
-                Go to sign in →
+                {t('join.goSignIn')}
               </Link>
             )}
           </div>
         )}
 
         <Input
-          label="Invite code"
+          label={t('join.inviteCode')}
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="From your manager"
+          placeholder={t('join.invitePlaceholder')}
           required
         />
 
         {code.length >= 4 && isFetching && <Spinner />}
         {preview && (
           <p className="rounded-lg bg-primary-50 p-3 text-sm text-primary-800 dark:bg-primary-900/30 dark:text-primary-200">
-            Joining <strong>{preview.restaurant_name}</strong> as{' '}
-            <strong>{isWaiterInvite ? 'Waiter' : 'Kitchen'}</strong>
-            {isWaiterInvite && ' — you will get a login to take orders from tables.'}
+            {t('join.joiningLine', {
+              restaurant: preview.restaurant_name,
+              role: isWaiterInvite ? t('employees.waiter') : t('employees.kitchen'),
+            })}
+            {isWaiterInvite && <> — {t('join.waiterHint')}</>}
           </p>
         )}
         {code.length >= 4 && isError && !isFetching && (
-          <p className="text-sm text-red-600">Invalid or expired code. Ask your manager for a new link.</p>
+          <p className="text-sm text-red-600">{t('join.invalidCode')}</p>
         )}
 
         <form onSubmit={handleRegister} className="space-y-4">
-          <Input label="Your name" value={name} onChange={(e) => setName(e.target.value)} required />
+          <Input label={t('join.yourName')} value={name} onChange={(e) => setName(e.target.value)} required />
           {isWaiterInvite && (
             <>
-              <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               <Input
-                label="Password"
+                label={t('auth.email')}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <Input
+                label={t('join.password')}
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -184,19 +195,22 @@ export function JoinStaffPage() {
               />
             </>
           )}
-          <Input label="Phone (optional)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input label={t('join.phoneOptional')} value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Button
             type="submit"
             className="w-full"
             loading={submitting}
             disabled={!preview || isFetching || (status?.type === 'success' && !isWaiterInvite)}
           >
-            {isWaiterInvite ? 'Create account & join' : 'Register'}
+            {isWaiterInvite ? t('join.createAndJoin') : t('join.register')}
           </Button>
         </form>
 
         <p className="text-center text-sm text-slate-500">
-          Already have an account? <Link to="/login" className="text-primary-600 hover:underline">Sign in</Link>
+          {t('join.hasAccount')}{' '}
+          <Link to="/login" className="text-primary-600 hover:underline">
+            {t('join.signIn')}
+          </Link>
         </p>
       </Card>
     </div>

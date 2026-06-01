@@ -13,10 +13,12 @@ import { useWaiters } from '@/hooks/useEmployees';
 import { useCreateOrderWithItems } from '@/hooks/useOrders';
 import { useAuth } from '@/contexts/AuthContext';
 import { isManager, isWaiter } from '@/lib/roles';
-import { formatCurrency } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { cartQtyForProduct, reportStockShortage, type StockFailure } from '@/lib/stock';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
+import { isTableAvailableForNewOrder } from '@/lib/tableOrder';
+import { t, tableStatus } from '@/i18n';
 
 interface CartLine {
   product_id: string;
@@ -52,10 +54,28 @@ export function CreateOrderPage() {
   const { data: waiters, isLoading: loadingWaiters } = useWaiters();
   const createOrder = useCreateOrderWithItems();
 
+  const availableTables = useMemo(
+    () => (tables ?? []).filter((tbl) => isTableAvailableForNewOrder(tbl)),
+    [tables],
+  );
+
   useEffect(() => {
-    const t = searchParams.get('table');
-    if (t) setTableId(t);
-  }, [searchParams]);
+    const tbl = searchParams.get('table');
+    if (!tbl) return;
+    if (!tables) return;
+    const selected = tables.find((t) => t.id === tbl);
+    if (selected && isTableAvailableForNewOrder(selected)) {
+      setTableId(tbl);
+      return;
+    }
+    if (selected && !isTableAvailableForNewOrder(selected)) {
+      setTableId('');
+      notify({
+        type: 'warning',
+        title: t('orders.tableOccupiedCannotOrder'),
+      });
+    }
+  }, [searchParams, tables, notify]);
 
   const activeWaiters = useMemo(
     () => (waiters ?? []).filter((w) => w.status === 'ACTIVE'),
@@ -75,6 +95,8 @@ export function CreateOrderPage() {
     [products],
   );
 
+  const notified = t('orders.managerNotifiedShort');
+
   const notifyShortage = async (productId: string, name: string, requested: number, available: number) => {
     try {
       await reportStockShortage(productId, requested, available);
@@ -83,8 +105,8 @@ export function CreateOrderPage() {
     }
     notify({
       type: 'error',
-      title: 'Not enough in stock',
-      message: `${name}: only ${available} available (you asked for ${requested}). Manager has been notified.`,
+      title: t('orders.notEnoughStock'),
+      message: t('orders.stockAskedFor', { name, available, requested, notified }),
     });
   };
 
@@ -136,21 +158,29 @@ export function CreateOrderPage() {
     const first = failures[0];
     notify({
       type: 'error',
-      title: 'Not enough stock',
-      message: failures.length === 1
-        ? `${first.product_name}: only ${first.available} in warehouse. Manager notified.`
-        : `${failures.length} items are out of stock. Manager notified.`,
+      title: t('orders.notEnoughStock'),
+      message:
+        failures.length === 1
+          ? t('orders.stockWarehouseSingle', { name: first.product_name, available: first.available, notified })
+          : t('orders.stockWarehouseMultiple', { n: failures.length, notified }),
     });
   };
 
   const submit = async (sendToKitchen: boolean) => {
     if (cart.length === 0) {
-      notify({ type: 'warning', title: 'Add at least one product' });
+      notify({ type: 'warning', title: t('orders.addOneProduct') });
       return;
     }
     if (isManagerUser && activeWaiters.length > 0 && !staffId) {
-      notify({ type: 'warning', title: 'Select a waiter' });
+      notify({ type: 'warning', title: t('orders.selectWaiter') });
       return;
+    }
+    if (tableId) {
+      const selected = (tables ?? []).find((tbl) => tbl.id === tableId);
+      if (!selected || !isTableAvailableForNewOrder(selected)) {
+        notify({ type: 'warning', title: t('orders.tableOccupiedCannotOrder') });
+        return;
+      }
     }
     try {
       await createOrder.mutateAsync({
@@ -162,8 +192,8 @@ export function CreateOrderPage() {
       });
       notify({
         type: 'success',
-        title: sendToKitchen ? 'Order sent to kitchen' : 'Order saved as draft',
-        message: tableId ? 'Table marked occupied.' : undefined,
+        title: sendToKitchen ? t('orders.orderSentKitchen') : t('orders.orderSavedDraft'),
+        message: tableId ? t('orders.tableOccupied') : undefined,
       });
       navigate('/orders');
     } catch (err) {
@@ -172,7 +202,7 @@ export function CreateOrderPage() {
         await handleStockFailures(stockFailures);
         return;
       }
-      notify({ type: 'error', title: 'Failed', message: getErrorMessage(err) });
+      notify({ type: 'error', title: t('orders.failed'), message: getErrorMessage(err) });
     }
   };
 
@@ -181,29 +211,35 @@ export function CreateOrderPage() {
   const waiterOptions = activeWaiters.map((w) => ({ value: w.id, label: w.name }));
 
   const tableOptions = [
-    { value: '', label: 'Takeaway (no table)' },
-    ...(tables ?? []).map((t) => ({
-      value: t.id,
-      label: `${t.name} — ${t.status} (${t.capacity} seats)`,
+    { value: '', label: t('orders.takeawayNoTable') },
+    ...availableTables.map((tbl) => ({
+      value: tbl.id,
+      label: t('orders.tableOption', {
+        name: tbl.name,
+        status: tableStatus(tbl.status),
+        n: tbl.capacity,
+      }),
     })),
   ];
 
+  const productList = (products as ProductRow[] | undefined) ?? [];
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
+    <div className={cn('page-stack', cart.length > 0 && 'pb-40 lg:pb-0')}>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
         <Button variant="ghost" size="sm" onClick={() => navigate('/orders')}>
-          <ArrowLeft className="h-4 w-4" /> Back
+          <ArrowLeft className="h-4 w-4" /> {t('common.back')}
         </Button>
-        <h2 className="text-2xl font-bold">New order</h2>
+        <h2 className="page-title">{t('orders.newOrderTitle')}</h2>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3 lg:gap-6">
         <div className="space-y-4 lg:col-span-2">
           <Card className="space-y-4">
-            <Select label="Table" value={tableId} onChange={(e) => setTableId(e.target.value)} options={tableOptions} />
+            <Select label={t('orders.table')} value={tableId} onChange={(e) => setTableId(e.target.value)} options={tableOptions} />
             {isManagerUser && waiterOptions.length > 0 && (
               <Select
-                label="Waiter"
+                label={t('orders.waiter')}
                 value={staffId}
                 onChange={(e) => setStaffId(e.target.value)}
                 options={waiterOptions}
@@ -211,38 +247,68 @@ export function CreateOrderPage() {
               />
             )}
             {isManagerUser && waiterOptions.length === 0 && (
-              <p className="text-sm text-amber-700 dark:text-amber-300">
-                No waiters on staff yet. Add waiters under Staff or send an invite link.
-              </p>
+              <p className="text-sm text-amber-700 dark:text-amber-300">{t('orders.noWaiters')}</p>
             )}
-            {isWaiterUser && <p className="text-sm text-slate-500">This order will be assigned to you.</p>}
-            <Input label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Allergies, special requests..." />
+            {isWaiterUser && <p className="text-sm text-slate-500">{t('orders.assignedToYou')}</p>}
+            <Input
+              label={t('orders.orderNotes')}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={t('orders.orderNotesPlaceholder')}
+            />
           </Card>
 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
               className="pl-10"
-              placeholder="Search meals & drinks..."
+              placeholder={t('orders.searchMeals')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+          <ul className="space-y-2 lg:hidden">
+            {productList.map((p) => {
+              const inCart = cartQtyForProduct(cart, p.id);
+              const outOfStock = p.stock_quantity <= 0;
+              const atLimit = inCart >= p.stock_quantity && p.stock_quantity > 0;
+              return (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
+                >
+                  <MenuImage src={p.image_url} alt={p.name} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{p.name}</p>
+                    <p className="text-xs text-slate-500">
+                      {p.categories?.name} · {formatCurrency(Number(p.price))} · {t('orders.stockCol')}{' '}
+                      {p.stock_quantity}
+                      {inCart > 0 ? ` · ${t('orders.inCart', { n: inCart })}` : ''}
+                    </p>
+                  </div>
+                  <Button size="sm" disabled={outOfStock || atLimit} onClick={() => void tryAddToCart(p)}>
+                    {t('orders.addToCart')}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="scroll-touch hidden rounded-xl border border-slate-200 dark:border-slate-800 lg:block">
             <table className="table-compact min-w-[560px]">
               <thead>
                 <tr>
-                  <th>Image</th>
-                  <th>Product</th>
-                  <th>Category</th>
-                  <th>Price</th>
-                  <th>Stock</th>
+                  <th>{t('orders.imageCol')}</th>
+                  <th>{t('orders.productCol')}</th>
+                  <th>{t('orders.categoryCol')}</th>
+                  <th>{t('orders.priceCol')}</th>
+                  <th>{t('orders.stockCol')}</th>
                   <th className="text-right" />
                 </tr>
               </thead>
               <tbody>
-                {(products as ProductRow[] | undefined)?.map((p) => {
+                {productList.map((p) => {
                   const inCart = cartQtyForProduct(cart, p.id);
                   const outOfStock = p.stock_quantity <= 0;
                   const atLimit = inCart >= p.stock_quantity && p.stock_quantity > 0;
@@ -261,7 +327,7 @@ export function CreateOrderPage() {
                           disabled={outOfStock || atLimit}
                           onClick={() => void tryAddToCart(p)}
                         >
-                          Add
+                          {t('orders.addToCart')}
                         </Button>
                       </td>
                     </tr>
@@ -272,17 +338,19 @@ export function CreateOrderPage() {
           </div>
         </div>
 
-        <Card className="h-fit space-y-4 lg:sticky lg:top-6">
-          <h3 className="font-semibold">Order cart</h3>
+        <Card className="hidden h-fit space-y-4 lg:sticky lg:top-6 lg:block">
+          <h3 className="font-semibold">{t('orders.cart')}</h3>
           {cart.length === 0 ? (
-            <p className="text-sm text-slate-500">Tap products to add them</p>
+            <p className="text-sm text-slate-500">{t('orders.cartEmptyHint')}</p>
           ) : (
             <ul className="space-y-3">
               {cart.map((line) => (
                 <li key={line.product_id} className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{line.name}</p>
-                    <p className="text-xs text-slate-500">{formatCurrency(line.price)} each</p>
+                    <p className="text-xs text-slate-500">
+                      {formatCurrency(line.price)} {t('orders.each')}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -307,20 +375,44 @@ export function CreateOrderPage() {
           )}
           <hr className="border-slate-200 dark:border-slate-700" />
           <div className="flex justify-between font-bold">
-            <span>Subtotal</span>
+            <span>{t('orders.subtotal')}</span>
             <span>{formatCurrency(subtotal)}</span>
           </div>
-          <p className="text-xs text-slate-500">Stock is checked from each product&apos;s quantity (set under Products).</p>
+          <p className="text-xs text-slate-500">{t('orders.stockHint')}</p>
           <div className="flex flex-col gap-2">
             <Button variant="secondary" disabled={cart.length === 0} loading={createOrder.isPending} onClick={() => submit(false)}>
-              Save draft
+              {t('orders.saveDraft')}
             </Button>
             <Button disabled={cart.length === 0} loading={createOrder.isPending} onClick={() => submit(true)}>
-              Send to kitchen
+              {t('orders.sendToKitchen')}
             </Button>
           </div>
         </Card>
       </div>
+
+      {cart.length > 0 && (
+        <div className="fixed-bottom-bar">
+          <div className="mb-2 flex items-center justify-between font-bold">
+            <span>
+              {t('orders.cart')} ({cart.length})
+            </span>
+            <span>{formatCurrency(subtotal)}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="secondary"
+              disabled={cart.length === 0}
+              loading={createOrder.isPending}
+              onClick={() => submit(false)}
+            >
+              {t('orders.saveDraft')}
+            </Button>
+            <Button disabled={cart.length === 0} loading={createOrder.isPending} onClick={() => submit(true)}>
+              {t('orders.sendToKitchen')}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

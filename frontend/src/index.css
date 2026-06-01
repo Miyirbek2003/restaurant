@@ -21,10 +21,40 @@ html {
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+  @apply overflow-x-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
 }
 
 @layer components {
+  .main-content {
+    @apply p-3 sm:p-4 lg:p-6;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .page-stack {
+    @apply space-y-4 sm:space-y-6;
+  }
+
+  .page-title {
+    @apply text-xl font-bold sm:text-2xl;
+  }
+
+  .touch-target {
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center;
+  }
+
+  .scroll-touch {
+    @apply overflow-x-auto overscroll-x-contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .fixed-bottom-bar {
+    @apply fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/95 lg:hidden;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
   .table-compact {
     @apply w-full text-left text-sm;
   }

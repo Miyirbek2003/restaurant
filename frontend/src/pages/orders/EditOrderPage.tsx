@@ -7,6 +7,8 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useOrder, useAddOrderItem, useRemoveOrderItem, useSendToKitchen } from '@/hooks/useOrders';
 import { useProducts } from '@/hooks/useProducts';
 import { formatCurrency } from '@/lib/utils';
+import { orderItemName } from '@/lib/orderItem';
+import { t } from '@/i18n';
 
 export function EditOrderPage() {
   const { id } = useParams<{ id: string }>();
@@ -41,40 +43,42 @@ export function EditOrderPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" onClick={() => navigate('/orders')}>
-          <ArrowLeft className="h-4 w-4" /> Back
+          <ArrowLeft className="h-4 w-4" /> {t('common.back')}
         </Button>
-        <h2 className="text-2xl font-bold">Edit order #{order.order_number}</h2>
+        <h2 className="text-2xl font-bold">{t('orders.editOrder', { n: order.order_number })}</h2>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="space-y-3">
-          <h3 className="font-semibold">Current items</h3>
+          <h3 className="font-semibold">{t('orders.currentItems')}</h3>
           {items.length === 0 ? (
-            <p className="text-sm text-slate-500">No items yet</p>
+            <p className="text-sm text-slate-500">{t('orders.noItems')}</p>
           ) : (
             items.map((item) => (
               <div key={item.id} className="flex items-center justify-between">
                 <span>
-                  {item.quantity}x {item.products?.name} — {formatCurrency(Number(item.unit_price) * item.quantity)}
+                  {item.quantity}x {orderItemName(item)} — {formatCurrency(Number(item.unit_price) * item.quantity)}
                 </span>
                 <button
                   type="button"
                   className="text-red-500 hover:text-red-600"
-                  onClick={() => removeItem.mutate(item.id)}
+                  onClick={() => removeItem.mutate({ itemId: item.id, orderId: order.id })}
                 >
                   <Minus className="h-4 w-4" />
                 </button>
               </div>
             ))
           )}
-          <p className="font-bold">Total: {formatCurrency(Number(order.total))}</p>
+          <p className="font-bold">
+            {t('orders.totalLabel')}: {formatCurrency(Number(order.total))}
+          </p>
           <Button className="w-full" loading={sendKitchen.isPending} onClick={() => sendKitchen.mutate(order.id)}>
-            Send to kitchen
+            {t('orders.sendToKitchen')}
           </Button>
         </Card>
 
         <Card className="space-y-3">
-          <h3 className="font-semibold">Add products</h3>
+          <h3 className="font-semibold">{t('orders.addProducts')}</h3>
           <div className="max-h-96 space-y-2 overflow-y-auto">
             {(products ?? []).map((p) => (
               <button

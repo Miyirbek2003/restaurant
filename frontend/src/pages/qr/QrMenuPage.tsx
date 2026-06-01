@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { t } from '@/i18n';
 
 export function QrMenuPage() {
   const { profile } = useAuth();
@@ -19,11 +20,11 @@ export function QrMenuPage() {
 
   return (
     <div className="mx-auto max-w-md space-y-6">
-      <h2 className="text-2xl font-bold">QR Menu</h2>
+      <h2 className="text-2xl font-bold">{t('qr.title')}</h2>
       <Card className="flex flex-col items-center text-center">
-        <p className="mb-4 text-slate-500">Scan to view {restaurant.name} menu</p>
+        <p className="mb-4 text-slate-500">{t('qr.scanHint', { name: restaurant.name })}</p>
         {qrUrl ? (
-          <img src={qrUrl} alt="QR Menu" className="rounded-lg" />
+          <img src={qrUrl} alt={t('qr.alt')} className="rounded-lg" />
         ) : (
           <Spinner />
         )}

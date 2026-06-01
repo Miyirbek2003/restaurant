@@ -24,6 +24,11 @@ export async function deductOrderStock(items: CartStockLine[]): Promise<void> {
   if (error) throw error;
 }
 
+export async function restoreOrderStock(items: CartStockLine[]): Promise<void> {
+  const { error } = await supabase.rpc('restore_order_stock', { p_items: items });
+  if (error) throw error;
+}
+
 export async function reportStockShortage(
   productId: string,
   requestedQty: number,

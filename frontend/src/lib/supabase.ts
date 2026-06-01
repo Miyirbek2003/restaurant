@@ -23,3 +23,14 @@ export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
     detectSessionInUrl: true,
   },
 });
+
+/** Separate client for admin-created accounts — does not touch the logged-in session. */
+export function createAuthlessClient() {
+  return createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}

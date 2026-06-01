@@ -16,7 +16,9 @@ export type OrderBill = {
   grandTotal: number;
 };
 
-type OrderItemRow = {
+import { orderItemName, type OrderItemNameSource } from '@/lib/orderItem';
+
+type OrderItemRow = OrderItemNameSource & {
   id: string;
   quantity: number;
   unit_price: number;
@@ -35,7 +37,7 @@ export function buildOrderBill(
     const lineTotal = unitPrice * quantity;
     return {
       id: item.id,
-      name: (item.products as { name: string } | null)?.name ?? 'Item',
+      name: orderItemName(item, 'Item'),
       quantity,
       unitPrice,
       lineTotal,

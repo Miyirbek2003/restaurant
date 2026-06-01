@@ -23,6 +23,8 @@ import { FLOOR_FILTER_ALL, DEFAULT_FLOORS, floorLabel, mergeFloors, type FloorFi
 import { useRestaurantFloors, useAddRestaurantFloor } from '@/hooks/useFloors';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
+import { OrderDetailModal } from '@/components/orders/OrderDetailModal';
+import { t, tableStatus } from '@/i18n';
 
 const statusColor: Record<string, 'green' | 'yellow' | 'blue' | 'gray'> = {
   FREE: 'green',
@@ -59,6 +61,7 @@ export function TablesPage() {
   const [capacity, setCapacity] = useState('4');
   const [floor, setFloor] = useState<string>(DEFAULT_FLOORS[0]);
   const [status, setStatus] = useState<TableStatus>('FREE');
+  const [viewOrderId, setViewOrderId] = useState<string | null>(null);
 
   const floorOptions = floors.map((f) => ({ value: f, label: f }));
 
@@ -106,7 +109,7 @@ export function TablesPage() {
           capacity: parseInt(capacity, 10),
           floor,
         });
-        notify({ type: 'success', title: 'Table added' });
+        notify({ type: 'success', title: t('tables.tableAdded') });
       } else if (editId) {
         await updateTable.mutateAsync({
           id: editId,
@@ -115,18 +118,18 @@ export function TablesPage() {
           floor,
           status,
         });
-        notify({ type: 'success', title: 'Table updated' });
+        notify({ type: 'success', title: t('tables.tableUpdated') });
       }
       setModal(null);
     } catch (err) {
-      notify({ type: 'error', title: 'Error', message: getErrorMessage(err) });
+      notify({ type: 'error', title: t('common.error'), message: getErrorMessage(err) });
     }
   };
 
   if (!restaurantId) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Tables</h2>
+        <h2 className="page-title">{t('tables.title')}</h2>
         <RestaurantRequired />
       </div>
     );
@@ -137,12 +140,12 @@ export function TablesPage() {
   if (isError) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Tables</h2>
+        <h2 className="page-title">{t('tables.title')}</h2>
         <Card className="max-w-lg space-y-3 border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/30">
-          <p className="font-medium text-red-800 dark:text-red-200">Could not load tables</p>
+          <p className="font-medium text-red-800 dark:text-red-200">{t('tables.loadFailed')}</p>
           <p className="text-sm text-red-700 dark:text-red-300">{getErrorMessage(error)}</p>
           <Button size="sm" variant="secondary" onClick={() => void refetch()}>
-            Retry
+            {t('common.retry')}
           </Button>
         </Card>
       </div>
@@ -152,10 +155,10 @@ export function TablesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold">Tables</h2>
+        <h2 className="page-title">{t('tables.title')}</h2>
         {canManage && (
           <Button onClick={openAdd}>
-            <Plus className="h-4 w-4" /> Add table
+            <Plus className="h-4 w-4" /> {t('tables.addTable')}
           </Button>
         )}
       </div>
@@ -166,7 +169,7 @@ export function TablesPage() {
           variant={floorFilter === FLOOR_FILTER_ALL ? 'primary' : 'secondary'}
           onClick={() => setFloorFilter(FLOOR_FILTER_ALL)}
         >
-          All ({floorCounts[FLOOR_FILTER_ALL]})
+          {t('tables.allFloors')} ({floorCounts[FLOOR_FILTER_ALL]})
         </Button>
         {floors.map((f) => (
           <Button
@@ -186,8 +189,8 @@ export function TablesPage() {
               setNewFloorName('');
               setFloorModalOpen(true);
             }}
-            title="Add floor"
-            aria-label="Add floor"
+            title={t('tables.addFloorTitle')}
+            aria-label={t('tables.addFloorTitle')}
           >
             <Plus className="h-4 w-4" />
           </Button>
@@ -196,118 +199,122 @@ export function TablesPage() {
 
       {tables.length === 0 ? (
         <p className="text-sm text-slate-500">
-          No tables yet.
-          {canManage ? ' Click Add table to create one.' : ' Ask your manager to add tables.'}
+          {t('tables.noTables')}
+          {canManage ? t('tables.noTablesManager') : t('tables.noTablesWaiter')}
         </p>
       ) : filteredTables.length === 0 ? (
-        <p className="text-sm text-slate-500">No tables on this floor. Try another filter or add a table.</p>
+        <p className="text-sm text-slate-500">{t('tables.noTablesFloor')}</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-          <table className="table-compact min-w-[640px]">
-            <thead>
-              <tr>
-                <th>Table</th>
-                <th>Floor</th>
-                <th>Seats</th>
-                <th>Status</th>
-                <th>Waiter</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTables.map((table) => (
-                <tr key={table.id}>
-                  <td className="font-semibold">{table.name}</td>
-                  <td>{floorLabel(table.floor)}</td>
-                  <td>{table.capacity}</td>
-                  <td>
-                    <Badge color={statusColor[table.status] ?? 'gray'} size="sm">
-                      {table.status}
-                    </Badge>
-                  </td>
-                  <td className="text-primary-600">{table.waiterName ?? '—'}</td>
-                  <td>
-                    <div className="flex flex-wrap items-center gap-1">
-                      {canOrder && table.status === 'FREE' && (
-                        <Button size="sm" onClick={() => goNewOrder(table.id)}>
-                          New order
-                        </Button>
-                      )}
-                      {canOrder && table.status === 'OCCUPIED' && table.openOrderId && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => navigate(`/orders/${table.openOrderId}/edit`)}
-                        >
-                          View order
-                        </Button>
-                      )}
-                      {canManage && (
-                        <>
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(table)} title="Edit table">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            title="Delete table"
-                            onClick={() => {
-                              if (window.confirm(`Delete table ${table.name}?`)) {
-                                deleteTable.mutate(table.id, {
-                                  onError: (err) =>
-                                    notify({
-                                      type: 'error',
-                                      title: 'Delete failed',
-                                      message: getErrorMessage(err),
-                                    }),
-                                });
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredTables.map((table) => (
+            <Card key={table.id} className="flex flex-col p-4">
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <h3 className="text-lg font-semibold">{table.name}</h3>
+                <Badge color={statusColor[table.status] ?? 'gray'} size="sm">
+                  {tableStatus(table.status)}
+                </Badge>
+              </div>
+              <dl className="flex-1 space-y-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">{t('tables.floor')}</dt>
+                  <dd className="font-medium">{floorLabel(table.floor)}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">{t('tables.seats')}</dt>
+                  <dd className="font-medium">{table.capacity}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">{t('tables.waiter')}</dt>
+                  <dd className={table.waiterName ? 'font-medium text-primary-600' : 'text-slate-400'}>
+                    {table.waiterName ?? '—'}
+                  </dd>
+                </div>
+              </dl>
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
+                {canOrder && table.status === 'FREE' && (
+                  <Button size="sm" className="flex-1" onClick={() => goNewOrder(table.id)}>
+                    {t('tables.newOrder')}
+                  </Button>
+                )}
+                {canOrder && table.status === 'OCCUPIED' && table.openOrderId && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setViewOrderId(table.openOrderId)}
+                  >
+                    {t('tables.viewOrder')}
+                  </Button>
+                )}
+                {canManage && (
+                  <>
+                    <Button size="sm" variant="ghost" onClick={() => openEdit(table)} title={t('tables.editTable')}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title={t('tables.deleteTable')}
+                      onClick={() => {
+                        if (window.confirm(t('tables.deleteConfirm', { name: table.name }))) {
+                          deleteTable.mutate(table.id, {
+                            onError: (err) =>
+                              notify({
+                                type: 'error',
+                                title: t('tables.deleteFailed'),
+                                message: getErrorMessage(err),
+                              }),
+                          });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </Card>
+          ))}
         </div>
       )}
 
+      <OrderDetailModal
+        orderId={viewOrderId}
+        open={viewOrderId !== null}
+        onClose={() => setViewOrderId(null)}
+      />
+
       {canManage && (
-        <Modal open={floorModalOpen} onClose={() => setFloorModalOpen(false)} title="Add floor">
+        <Modal open={floorModalOpen} onClose={() => setFloorModalOpen(false)} title={t('tables.addFloorTitle')}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
               addFloor.mutate(newFloorName, {
                 onSuccess: (list) => {
-                  notify({ type: 'success', title: 'Floor added' });
+                  notify({ type: 'success', title: t('tables.floorAdded') });
                   setFloorModalOpen(false);
                   setNewFloorName('');
                   setFloorFilter(list[list.length - 1] ?? FLOOR_FILTER_ALL);
                 },
                 onError: (err) =>
-                  notify({ type: 'error', title: 'Could not add floor', message: getErrorMessage(err) }),
+                  notify({ type: 'error', title: t('tables.floorAddFailed'), message: getErrorMessage(err) }),
               });
             }}
             className="space-y-4"
           >
             <Input
-              label="Floor name"
+              label={t('tables.floorName')}
               value={newFloorName}
               onChange={(e) => setNewFloorName(e.target.value)}
-              placeholder="Terrace, VIP room…"
+              placeholder={t('tables.floorPlaceholder')}
               required
             />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setFloorModalOpen(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" loading={addFloor.isPending}>
-                Add
+                {t('common.add')}
               </Button>
             </div>
           </form>
@@ -318,38 +325,38 @@ export function TablesPage() {
         <Modal
           open={modal !== null}
           onClose={() => setModal(null)}
-          title={modal === 'add' ? 'Add table' : 'Edit table'}
+          title={modal === 'add' ? t('tables.addTableTitle') : t('tables.editTableTitle')}
         >
           <form onSubmit={handleSave} className="space-y-4">
-            <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} required placeholder="T1" />
+            <Input label={t('common.name')} value={name} onChange={(e) => setName(e.target.value)} required placeholder="T1" />
             <Input
-              label="Capacity"
+              label={t('tables.capacity')}
               type="number"
               min="1"
               value={capacity}
               onChange={(e) => setCapacity(e.target.value)}
               required
             />
-            <Select label="Floor" value={floor} onChange={(e) => setFloor(e.target.value)} options={floorOptions} />
+            <Select label={t('tables.floor')} value={floor} onChange={(e) => setFloor(e.target.value)} options={floorOptions} />
             {modal === 'edit' && (
               <Select
-                label="Status"
+                label={t('tables.statusLabel')}
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TableStatus)}
                 options={[
-                  { value: 'FREE', label: 'Free' },
-                  { value: 'OCCUPIED', label: 'Occupied' },
-                  { value: 'RESERVED', label: 'Reserved' },
-                  { value: 'CLEANING', label: 'Cleaning' },
+                  { value: 'FREE', label: tableStatus('FREE') },
+                  { value: 'OCCUPIED', label: tableStatus('OCCUPIED') },
+                  { value: 'RESERVED', label: tableStatus('RESERVED') },
+                  { value: 'CLEANING', label: tableStatus('CLEANING') },
                 ]}
               />
             )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setModal(null)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" loading={createTable.isPending || updateTable.isPending}>
-                Save
+                {t('common.save')}
               </Button>
             </div>
           </form>

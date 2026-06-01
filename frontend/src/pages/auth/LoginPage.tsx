@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { useLogin } from '@/hooks/useAuth';
 import { useAuth } from '@/contexts/AuthContext';
 import { getHomeForRole } from '@/lib/roles';
+import { t } from '@/i18n';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -23,37 +24,41 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-dvh min-h-screen">
       <div className="hidden flex-1 flex-col justify-between bg-gradient-to-br from-primary-600 to-primary-900 p-12 text-white lg:flex">
         <div className="flex items-center gap-3">
           <UtensilsCrossed className="h-10 w-10" />
           <span className="text-2xl font-bold">RestoPOS</span>
         </div>
         <div>
-          <h2 className="text-4xl font-bold">Restaurant POS SaaS</h2>
-          <p className="mt-4 max-w-md text-primary-100">
-            Multi-tenant restaurant management powered by Supabase Auth & Database.
-          </p>
+          <h2 className="text-4xl font-bold">{t('auth.heroTitle')}</h2>
+          <p className="mt-4 max-w-md text-primary-100">{t('auth.heroSubtitle')}</p>
         </div>
       </div>
-      <div className="flex flex-1 items-center justify-center p-8">
+      <div className="flex flex-1 items-center justify-center p-4 pb-safe sm:p-8">
         <form onSubmit={handleSubmit} className="w-full max-w-md space-y-6">
-          <h1 className="text-2xl font-bold">Sign in</h1>
-          <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <h1 className="text-2xl font-bold">{t('auth.signIn')}</h1>
           <Input
-            label="Password"
+            label={t('auth.email')}
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <Input
+            label={t('auth.password')}
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
           <Button type="submit" className="w-full" loading={login.isPending}>
-            Sign in
+            {t('auth.signInButton')}
           </Button>
           <p className="text-center text-sm text-slate-500">
-            Staff member?{' '}
+            {t('auth.staffJoin')}{' '}
             <a href="/join" className="text-primary-600 hover:underline">
-              Join with invite code
+              {t('auth.joinInvite')}
             </a>
           </p>
         </form>

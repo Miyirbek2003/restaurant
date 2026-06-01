@@ -15,7 +15,12 @@ import { RestaurantsPage } from '@/pages/admin/RestaurantsPage';
 import { AdminAnalyticsPage } from '@/pages/admin/AdminAnalyticsPage';
 import { PublicMenuPage } from '@/pages/public/PublicMenuPage';
 import { QrMenuPage } from '@/pages/qr/QrMenuPage';
-import { ResourceListPage } from '@/pages/shared/ResourceListPage';
+import { SuppliersPage } from '@/pages/suppliers/SuppliersPage';
+import { ExpensesPage } from '@/pages/expenses/ExpensesPage';
+import { IncomesPage } from '@/pages/incomes/IncomesPage';
+import { SalariesPage } from '@/pages/salaries/SalariesPage';
+import { CustomersPage } from '@/pages/customers/CustomersPage';
+import { DiscountsPage } from '@/pages/discounts/DiscountsPage';
 import { EmployeesPage } from '@/pages/employees/EmployeesPage';
 import type { UserRole } from '@/types';
 import { getHomeForRole } from '@/lib/roles';
@@ -71,10 +76,12 @@ export default function App() {
         <Route path="kitchen" element={<Navigate to="/orders" replace />} />
 
         <Route path="inventory" element={<ProtectedRoute roles={managerOnly}><InventoryPage /></ProtectedRoute>} />
-        <Route path="suppliers" element={<ProtectedRoute roles={managerOnly}><ResourceListPage table="suppliers" title="Suppliers" fields={['name', 'phone', 'email']} /></ProtectedRoute>} />
-        <Route path="expenses" element={<ProtectedRoute roles={managerOnly}><ResourceListPage table="expenses" title="Expenses" fields={['title', 'category', 'amount', 'date']} /></ProtectedRoute>} />
-        <Route path="customers" element={<ProtectedRoute roles={managerOnly}><ResourceListPage table="customers" title="Customers" fields={['name', 'phone', 'loyalty_points']} /></ProtectedRoute>} />
-        <Route path="discounts" element={<ProtectedRoute roles={managerOnly}><ResourceListPage table="discounts" title="Discounts" fields={['name', 'type', 'value', 'is_active']} /></ProtectedRoute>} />
+        <Route path="expenses" element={<ProtectedRoute roles={managerOnly}><ExpensesPage /></ProtectedRoute>} />
+        <Route path="suppliers" element={<ProtectedRoute roles={managerOnly}><SuppliersPage /></ProtectedRoute>} />
+        <Route path="incomes" element={<ProtectedRoute roles={managerOnly}><IncomesPage /></ProtectedRoute>} />
+        <Route path="salaries" element={<ProtectedRoute roles={managerOnly}><SalariesPage /></ProtectedRoute>} />
+        <Route path="customers" element={<ProtectedRoute roles={managerOnly}><CustomersPage /></ProtectedRoute>} />
+        <Route path="discounts" element={<ProtectedRoute roles={managerOnly}><DiscountsPage /></ProtectedRoute>} />
         <Route path="employees" element={<ProtectedRoute roles={managerOnly}><EmployeesPage /></ProtectedRoute>} />
         <Route path="qr-menu" element={<ProtectedRoute roles={managerOnly}><QrMenuPage /></ProtectedRoute>} />
       </Route>

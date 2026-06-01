@@ -13,6 +13,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useDashboard, useRevenueChart } from '@/hooks/useDashboard';
 import { formatCurrency } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { t } from '@/i18n';
 
 function StatCard({
   title,
@@ -50,8 +51,8 @@ export function DashboardPage() {
   if (profile?.role === 'SUPER_ADMIN') {
     return (
       <div>
-        <h2 className="mb-4 text-2xl font-bold">Platform Dashboard</h2>
-        <p className="text-slate-500">Manage restaurants from the sidebar.</p>
+        <h2 className="mb-4 text-2xl font-bold">{t('dashboard.platformTitle')}</h2>
+        <p className="text-slate-500">{t('dashboard.platformHint')}</p>
       </div>
     );
   }
@@ -59,31 +60,29 @@ export function DashboardPage() {
   if (!profile?.restaurant_id) {
     return (
       <div className="rounded-lg border border-amber-300 bg-amber-50 p-6 dark:border-amber-700 dark:bg-amber-950/30">
-        <h2 className="font-semibold">Account not linked</h2>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          Your profile has no restaurant assigned. Ask an admin to set restaurant_id and role in the profiles table.
-        </p>
+        <h2 className="font-semibold">{t('dashboard.notLinked')}</h2>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{t('dashboard.notLinkedHint')}</p>
       </div>
     );
   }
 
   if (isLoading) return <Spinner />;
-  if (error || !data) return <div className="text-red-500">Failed to load dashboard</div>;
+  if (error || !data) return <div className="text-red-500">{t('dashboard.loadFailed')}</div>;
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Dashboard</h2>
+      <h2 className="text-2xl font-bold">{t('dashboard.title')}</h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Revenue Today" value={formatCurrency(data.revenueToday, currency)} icon={DollarSign} />
-        <StatCard title="Revenue This Month" value={formatCurrency(data.revenueMonth, currency)} icon={TrendingUp} />
+        <StatCard title={t('dashboard.revenueToday')} value={formatCurrency(data.revenueToday, currency)} icon={DollarSign} />
+        <StatCard title={t('dashboard.revenueMonth')} value={formatCurrency(data.revenueMonth, currency)} icon={TrendingUp} />
         <StatCard
-          title="Open Orders"
+          title={t('dashboard.openOrders')}
           value={String(data.openOrders)}
           icon={ShoppingBag}
-          subtitle={`${data.ordersToday} orders today`}
+          subtitle={t('dashboard.ordersToday', { n: data.ordersToday })}
         />
         <StatCard
-          title="Tables Occupied"
+          title={t('dashboard.tablesOccupied')}
           value={`${data.occupiedTables}/${data.totalTables}`}
           icon={Table2}
         />
@@ -92,7 +91,7 @@ export function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Revenue</CardTitle>
+            <CardTitle>{t('dashboard.revenue')}</CardTitle>
           </CardHeader>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -109,20 +108,20 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Profit This Month</CardTitle>
+            <CardTitle>{t('dashboard.profitThisMonth')}</CardTitle>
           </CardHeader>
           <div className="space-y-4">
             <div className="flex justify-between">
-              <span className="text-slate-500">Revenue</span>
+              <span className="text-slate-500">{t('dashboard.revenue')}</span>
               <span className="font-medium text-emerald-600">{formatCurrency(data.revenueMonth, currency)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Expenses</span>
+              <span className="text-slate-500">{t('dashboard.expenses')}</span>
               <span className="font-medium text-red-500">{formatCurrency(data.expensesMonth, currency)}</span>
             </div>
             <hr className="border-slate-200 dark:border-slate-700" />
             <div className="flex justify-between text-lg font-bold">
-              <span>Net Profit</span>
+              <span>{t('dashboard.netProfit')}</span>
               <span className={data.profitMonth >= 0 ? 'text-emerald-600' : 'text-red-500'}>
                 {formatCurrency(data.profitMonth, currency)}
               </span>
@@ -133,13 +132,13 @@ export function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Best Sellers</CardTitle>
+          <CardTitle>{t('dashboard.bestSellers')}</CardTitle>
         </CardHeader>
         <ul className="space-y-2">
           {data.bestSellers.map((item) => (
             <li key={item.name} className="flex justify-between text-sm">
               <span>{item.name}</span>
-              <span className="text-slate-500">{item.quantity} sold</span>
+              <span className="text-slate-500">{t('dashboard.soldCount', { n: item.quantity })}</span>
             </li>
           ))}
         </ul>

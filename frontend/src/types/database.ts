@@ -138,7 +138,8 @@ export interface Database {
           id: string;
           restaurant_id: string;
           order_id: string;
-          product_id: string;
+          product_id: string | null;
+          product_name: string;
           quantity: number;
           unit_price: number;
           tax_rate: number;

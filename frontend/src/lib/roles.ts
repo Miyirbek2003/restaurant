@@ -7,6 +7,25 @@ export const ROLE_HOME: Record<UserRole, string> = {
   KITCHEN: '/login',
 };
 
+/** Paths for restaurant back-office (manager UI). Keep in sync with App.tsx routes. */
+export const MANAGER_PATH_PREFIXES = [
+  '/dashboard',
+  '/menu',
+  '/tables',
+  '/orders',
+  '/inventory',
+  '/expenses',
+  '/suppliers',
+  '/incomes',
+  '/salaries',
+  '/customers',
+  '/discounts',
+  '/employees',
+  '/qr-menu',
+] as const;
+
+export const MANAGER_ROUTE_ROLES: UserRole[] = ['MANAGER'];
+
 export function getHomeForRole(role: UserRole | undefined): string {
   return role ? ROLE_HOME[role] : '/login';
 }
@@ -14,26 +33,23 @@ export function getHomeForRole(role: UserRole | undefined): string {
 /** Routes a role may access (path prefixes) */
 const ROUTE_ACCESS: Record<UserRole, string[]> = {
   SUPER_ADMIN: ['/admin', '/dashboard'],
-  MANAGER: [
-    '/dashboard',
-    '/menu',
-    '/tables',
-    '/orders',
-    '/inventory',
-    '/suppliers',
-    '/expenses',
-    '/customers',
-    '/discounts',
-    '/employees',
-    '/qr-menu',
-  ],
+  MANAGER: [...MANAGER_PATH_PREFIXES],
   WAITER: ['/tables', '/orders', '/menu'],
   KITCHEN: [],
 };
 
 export function canAccessPath(role: UserRole, pathname: string): boolean {
-  const allowed = ROUTE_ACCESS[role];
+  const allowed = ROUTE_ACCESS[role] ?? [];
   return allowed.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+export function hasRequiredRoles(
+  userRole: UserRole | undefined,
+  required: UserRole[] | undefined,
+): boolean {
+  if (!required?.length) return true;
+  if (!userRole) return false;
+  return required.includes(userRole);
 }
 
 export function isManager(role: UserRole): boolean {

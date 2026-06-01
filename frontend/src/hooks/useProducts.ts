@@ -126,10 +126,14 @@ export function useDeleteProduct() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('products').delete().eq('id', id);
+      const { error } = await supabase.rpc('remove_menu_product', { p_product_id: id });
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['products'] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['products'] });
+      void qc.invalidateQueries({ queryKey: ['inventory_items'] });
+      void qc.invalidateQueries({ queryKey: ['warehouse-product-ids'] });
+    },
   });
 }
 
@@ -137,12 +141,14 @@ export function useDeleteCategory() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('categories').delete().eq('id', id);
+      const { error } = await supabase.rpc('remove_menu_category', { p_category_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['categories'] });
       void qc.invalidateQueries({ queryKey: ['products'] });
+      void qc.invalidateQueries({ queryKey: ['inventory_items'] });
+      void qc.invalidateQueries({ queryKey: ['warehouse-product-ids'] });
     },
   });
 }

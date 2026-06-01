@@ -5,6 +5,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { RestaurantRequired } from '@/components/RestaurantRequired';
 import { useRestaurantId } from '@/contexts/AuthContext';
 import { useKitchenQueue, useUpdateOrderStatus } from '@/hooks/useOrders';
+import { orderItemName } from '@/lib/orderItem';
 import { getErrorMessage } from '@/lib/errors';
 import type { OrderStatus } from '@/types';
 
@@ -64,11 +65,18 @@ export function KitchenPage() {
                     {(order.tables as { name: string } | null)?.name ?? 'No table'}
                   </p>
                   <ul className="mt-2 space-y-1 text-sm">
-                    {(order.order_items ?? []).map((item: { id: string; quantity: number; products?: { name: string } | null }) => (
+                    {(order.order_items ?? []).map(
+                      (item: {
+                        id: string;
+                        quantity: number;
+                        product_name?: string | null;
+                        products?: { name: string } | null;
+                      }) => (
                       <li key={item.id}>
-                        {item.quantity}x {(item.products as { name: string } | null)?.name}
+                        {item.quantity}x {orderItemName(item)}
                       </li>
-                    ))}
+                    ),
+                    )}
                   </ul>
                   <div className="mt-3 flex gap-2">
                     {col.key === 'NEW' && (

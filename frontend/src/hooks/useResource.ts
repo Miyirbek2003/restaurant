@@ -2,14 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useRestaurantId } from '@/contexts/AuthContext';
 
-type TableName =
-  | 'customers'
-  | 'suppliers'
-  | 'expenses'
-  | 'discounts'
-  | 'inventory_items';
+export type ResourceTable = 'customers' | 'suppliers' | 'expenses' | 'discounts';
 
-export function useResourceList<T>(table: TableName, select = '*') {
+export function useResourceList<T>(table: ResourceTable, select = '*') {
   const restaurantId = useRestaurantId();
 
   return useQuery({
@@ -27,7 +22,7 @@ export function useResourceList<T>(table: TableName, select = '*') {
   });
 }
 
-export function useResourceInsert(table: TableName) {
+export function useResourceInsert(table: ResourceTable) {
   const restaurantId = useRestaurantId();
   const qc = useQueryClient();
 
@@ -41,6 +36,40 @@ export function useResourceInsert(table: TableName) {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [table] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [table] });
+      if (table === 'expenses') void qc.invalidateQueries({ queryKey: ['salaries'] });
+    },
+  });
+}
+
+export function useResourceUpdate(table: ResourceTable) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string } & Record<string, unknown>) => {
+      const { data, error } = await supabase.from(table).update(body).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [table] });
+      if (table === 'expenses') void qc.invalidateQueries({ queryKey: ['salaries'] });
+    },
+  });
+}
+
+export function useResourceDelete(table: ResourceTable) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [table] });
+      if (table === 'expenses') void qc.invalidateQueries({ queryKey: ['salaries'] });
+    },
   });
 }

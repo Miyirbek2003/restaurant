@@ -6,13 +6,19 @@ import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { PayOrderModal } from '@/components/orders/PayOrderModal';
+import { OrderDetailModal } from '@/components/orders/OrderDetailModal';
 import { useOrders, useSendToKitchen, useCloseOrder, useUpdateOrderStatus } from '@/hooks/useOrders';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { getWaiterName } from '@/lib/orderUtils';
-import { isManager } from '@/lib/roles';
+import { canEditOrderItems, canPayOrder } from '@/lib/orderEdit';
+import { canPlaceOrders } from '@/lib/roles';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
+import { reportStockShortage, type StockFailure } from '@/lib/stock';
+import { t, orderStatus } from '@/i18n';
+import { defaultDateRangeDays, matchesDateRange, matchesSearch } from '@/lib/filters';
+import { ListFilters, type ListFiltersValue } from '@/components/ui/ListFilters';
 import type { OrderStatus } from '@/types';
 
 const statusColor: Record<string, 'green' | 'yellow' | 'blue' | 'gray' | 'red'> = {
@@ -25,15 +31,18 @@ const statusColor: Record<string, 'green' | 'yellow' | 'blue' | 'gray' | 'red'> 
   CANCELLED: 'red',
 };
 
-type ViewFilter = 'all' | 'draft' | 'kitchen' | 'payment' | 'paid';
+type ViewFilter = 'active' | 'all' | 'draft' | 'kitchen' | 'payment' | 'paid';
 
 const VIEW_LABELS: Record<ViewFilter, string> = {
-  all: 'All',
-  draft: 'Draft',
-  kitchen: 'In kitchen',
-  payment: 'Ready to pay',
-  paid: 'Paid',
+  active: t('orders.active'),
+  all: t('common.all'),
+  draft: t('orders.draft'),
+  kitchen: t('orders.inKitchen'),
+  payment: t('orders.readyToPay'),
+  paid: t('orders.paid'),
 };
+
+const VIEW_ORDER: ViewFilter[] = ['active', 'kitchen', 'payment', 'paid', 'draft', 'all'];
 
 const KITCHEN_STATUSES: OrderStatus[] = ['NEW', 'PREPARING', 'READY'];
 
@@ -45,6 +54,7 @@ type OrderRow = {
   tax_amount: number;
   total: number;
   table_id: string | null;
+  created_at: string;
   tables: { name: string } | null;
   staff?: { name: string; role?: string } | null;
   order_items?: {
@@ -56,10 +66,11 @@ type OrderRow = {
 };
 
 function matchesView(order: OrderRow, view: ViewFilter): boolean {
+  if (view === 'active') return order.status !== 'PAID' && order.status !== 'CANCELLED';
   if (view === 'all') return order.status !== 'CANCELLED';
   if (view === 'draft') return order.status === 'DRAFT';
   if (view === 'kitchen') return KITCHEN_STATUSES.includes(order.status);
-  if (view === 'payment') return order.status === 'SERVED';
+  if (view === 'payment') return canPayOrder(order.status);
   if (view === 'paid') return order.status === 'PAID';
   return true;
 }
@@ -67,16 +78,14 @@ function matchesView(order: OrderRow, view: ViewFilter): boolean {
 function kitchenAction(
   status: OrderStatus,
 ): { label: string; next: OrderStatus } | null {
-  if (status === 'NEW') return { label: 'Start cooking', next: 'PREPARING' };
-  if (status === 'PREPARING') return { label: 'Ready', next: 'READY' };
-  if (status === 'READY') return { label: 'Served', next: 'SERVED' };
+  if (status === 'NEW') return { label: t('orders.startCooking'), next: 'PREPARING' };
+  if (status === 'PREPARING') return { label: t('orders.markReady'), next: 'READY' };
+  if (status === 'READY') return { label: t('orders.markServed'), next: 'SERVED' };
   return null;
 }
 
 export function OrdersPage() {
   const { profile } = useAuth();
-  const role = profile?.role;
-  const manager = role ? isManager(role) : false;
   const notify = useNotificationStore((s) => s.add);
 
   const { data: orders, isLoading } = useOrders();
@@ -84,27 +93,73 @@ export function OrdersPage() {
   const closeOrder = useCloseOrder();
   const updateStatus = useUpdateOrderStatus();
 
-  const [view, setView] = useState<ViewFilter>('all');
+  const [view, setView] = useState<ViewFilter>('active');
+  const [filters, setFilters] = useState<ListFiltersValue>(() => {
+    const range = defaultDateRangeDays(30);
+    return { search: '', dateFrom: range.from, dateTo: range.to };
+  });
   const [payOrder, setPayOrder] = useState<OrderRow | null>(null);
+  const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
+  const canUpdateItems = canPlaceOrders(profile?.role);
 
   const orderList = (orders ?? []) as OrderRow[];
 
+  const periodOrders = useMemo(
+    () =>
+      orderList
+        .filter((o) => matchesDateRange(o.created_at, filters.dateFrom, filters.dateTo))
+        .filter((o) =>
+          matchesSearch(filters.search, String(o.order_number), o.tables?.name, getWaiterName(o)),
+        ),
+    [orderList, filters],
+  );
+
   const counts = useMemo(() => {
-    const c: Record<ViewFilter, number> = { all: 0, draft: 0, kitchen: 0, payment: 0, paid: 0 };
-    for (const o of orderList) {
+    const c: Record<ViewFilter, number> = {
+      active: 0,
+      all: 0,
+      draft: 0,
+      kitchen: 0,
+      payment: 0,
+      paid: 0,
+    };
+    for (const o of periodOrders) {
+      if (o.status !== 'PAID' && o.status !== 'CANCELLED') c.active += 1;
       if (o.status !== 'CANCELLED') c.all += 1;
       if (o.status === 'DRAFT') c.draft += 1;
       if (KITCHEN_STATUSES.includes(o.status)) c.kitchen += 1;
-      if (o.status === 'SERVED') c.payment += 1;
+      if (canPayOrder(o.status)) c.payment += 1;
       if (o.status === 'PAID') c.paid += 1;
     }
     return c;
-  }, [orderList]);
+  }, [periodOrders]);
 
   const filtered = useMemo(
-    () => orderList.filter((o) => matchesView(o, view)),
-    [orderList, view],
+    () => periodOrders.filter((o) => matchesView(o, view)),
+    [periodOrders, view],
   );
+
+  const sendToKitchen = (orderId: string) => {
+    sendKitchen.mutate(orderId, {
+      onSuccess: () => notify({ type: 'success', title: t('orders.sentToKitchenSuccess') }),
+      onError: async (err) => {
+        const stockFailures = (err as Error & { stockFailures?: StockFailure[] }).stockFailures;
+        if (stockFailures?.length) {
+          for (const f of stockFailures) {
+            await reportStockShortage(f.product_id, f.requested, f.available);
+          }
+          const first = stockFailures[0];
+          notify({
+            type: 'error',
+            title: t('orders.notEnoughStock'),
+            message: t('orders.onlyAvailable', { name: first.product_name, n: first.available }),
+          });
+          return;
+        }
+        notify({ type: 'error', title: t('orders.sendKitchenFailed'), message: getErrorMessage(err) });
+      },
+    });
+  };
 
   const confirmPay = (grandTotal: number) => {
     if (!payOrder) return;
@@ -116,11 +171,11 @@ export function OrdersPage() {
       },
       {
         onSuccess: () => {
-          notify({ type: 'success', title: 'Payment recorded', message: formatCurrency(grandTotal) });
+          notify({ type: 'success', title: t('orders.paymentRecorded'), message: formatCurrency(grandTotal) });
           setPayOrder(null);
         },
         onError: (err) =>
-          notify({ type: 'error', title: 'Payment failed', message: getErrorMessage(err) }),
+          notify({ type: 'error', title: t('orders.paymentFailed'), message: getErrorMessage(err) }),
       },
     );
   };
@@ -129,18 +184,24 @@ export function OrdersPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Orders</h2>
-          <p className="text-sm text-slate-500">Track food preparation and payments</p>
+          <h2 className="page-title">{t('orders.title')}</h2>
+          <p className="text-sm text-slate-500">{t('orders.subtitle')}</p>
         </div>
         <Link to="/orders/new">
           <Button>
-            <Plus className="h-4 w-4" /> New order
+            <Plus className="h-4 w-4" /> {t('orders.newOrder')}
           </Button>
         </Link>
       </div>
 
+      <ListFilters
+        value={filters}
+        onChange={setFilters}
+        searchPlaceholder={t('orders.searchPlaceholder')}
+      />
+
       <div className="flex flex-wrap gap-2">
-        {(Object.keys(VIEW_LABELS) as ViewFilter[]).map((key) => (
+        {VIEW_ORDER.map((key) => (
           <Button
             key={key}
             size="sm"
@@ -156,11 +217,9 @@ export function OrdersPage() {
         <Spinner />
       ) : filtered.length === 0 ? (
         <EmptyState
-          title="No orders here"
+          title={t('orders.noOrders')}
           description={
-            view === 'kitchen'
-              ? 'Send draft orders to the kitchen to see them here.'
-              : 'Create an order from Tables or New order.'
+            view === 'kitchen' ? t('orders.noOrdersKitchen') : t('orders.noOrdersDefault')
           }
         />
       ) : (
@@ -168,7 +227,7 @@ export function OrdersPage() {
           {filtered.map((order) => {
             const action = kitchenAction(order.status);
             const items = order.order_items ?? [];
-            const tableName = order.tables?.name ?? 'Takeaway';
+            const tableName = order.tables?.name ?? t('common.takeaway');
 
             return (
               <div
@@ -185,7 +244,7 @@ export function OrdersPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge color={statusColor[order.status] ?? 'gray'} size="sm">
-                      {order.status}
+                      {orderStatus(order.status)}
                     </Badge>
                     <span className="font-bold">{formatCurrency(Number(order.total))}</span>
                   </div>
@@ -196,7 +255,7 @@ export function OrdersPage() {
                     {items.map((item) => (
                       <li key={item.id} className="flex justify-between gap-4 text-slate-600 dark:text-slate-400">
                         <span>
-                          {item.quantity}× {(item.products as { name: string } | null)?.name ?? 'Item'}
+                          {item.quantity}× {(item.products as { name: string } | null)?.name ?? t('common.item')}
                         </span>
                         <span className="tabular-nums">
                           {formatCurrency(Number(item.unit_price) * item.quantity)}
@@ -207,21 +266,19 @@ export function OrdersPage() {
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                  {canUpdateItems && canEditOrderItems(order.status) && (
+                    <Button size="sm" variant="secondary" onClick={() => setDetailOrderId(order.id)}>
+                      {t('orders.updateItems')}
+                    </Button>
+                  )}
                   {order.status === 'DRAFT' && (
-                    <>
-                      <Link to={`/orders/${order.id}/edit`}>
-                        <Button size="sm" variant="secondary">
-                          Edit
-                        </Button>
-                      </Link>
-                      <Button
-                        size="sm"
-                        loading={sendKitchen.isPending}
-                        onClick={() => sendKitchen.mutate(order.id)}
-                      >
-                        Send to kitchen
-                      </Button>
-                    </>
+                    <Button
+                      size="sm"
+                      loading={sendKitchen.isPending}
+                      onClick={() => sendToKitchen(order.id)}
+                    >
+                      {t('orders.sendToKitchen')}
+                    </Button>
                   )}
                   {action && (
                     <Button
@@ -232,9 +289,9 @@ export function OrdersPage() {
                       {action.label}
                     </Button>
                   )}
-                  {manager && order.status === 'SERVED' && (
+                  {canPlaceOrders(profile?.role) && canPayOrder(order.status) && (
                     <Button size="sm" onClick={() => setPayOrder(order)}>
-                      Pay
+                      {t('orders.pay')}
                     </Button>
                   )}
                 </div>
@@ -244,12 +301,18 @@ export function OrdersPage() {
         </div>
       )}
 
+      <OrderDetailModal
+        orderId={detailOrderId}
+        open={detailOrderId !== null}
+        onClose={() => setDetailOrderId(null)}
+      />
+
       {payOrder && (
         <PayOrderModal
           open
           onClose={() => setPayOrder(null)}
           orderNumber={payOrder.order_number}
-          tableName={payOrder.tables?.name ?? 'Takeaway'}
+          tableName={payOrder.tables?.name ?? t('common.takeaway')}
           items={payOrder.order_items ?? []}
           subtotal={Number(payOrder.subtotal)}
           taxAmount={Number(payOrder.tax_amount)}

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { MenuImage } from '@/components/ui/MenuImage';
 import { uploadMenuImage } from '@/lib/uploadImage';
 import { useRestaurantId } from '@/contexts/AuthContext';
+import { t } from '@/i18n';
 
 type ImageUrlFieldProps = {
   label?: string;
@@ -12,7 +13,7 @@ type ImageUrlFieldProps = {
   previewAlt: string;
 };
 
-export function ImageUrlField({ label = 'Image', value, onChange, previewAlt }: ImageUrlFieldProps) {
+export function ImageUrlField({ label, value, onChange, previewAlt }: ImageUrlFieldProps) {
   const restaurantId = useRestaurantId();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -34,10 +35,10 @@ export function ImageUrlField({ label = 'Image', value, onChange, previewAlt }: 
         <MenuImage src={value} alt={previewAlt} size="lg" />
         <div className="min-w-0 flex-1 space-y-2">
           <Input
-            label={label}
+            label={label ?? t('common.image')}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder="https://… or upload a file"
+            placeholder={t('common.imagePlaceholder')}
           />
           <input
             ref={fileRef}
@@ -53,7 +54,7 @@ export function ImageUrlField({ label = 'Image', value, onChange, previewAlt }: 
             loading={uploading}
             onClick={() => fileRef.current?.click()}
           >
-            Upload image
+            {t('common.uploadImage')}
           </Button>
         </div>
       </div>

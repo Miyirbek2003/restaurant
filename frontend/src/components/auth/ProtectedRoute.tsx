@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { canAccessPath, getHomeForRole } from '@/lib/roles';
+import { canAccessPath, getHomeForRole, hasRequiredRoles } from '@/lib/roles';
 import type { UserRole } from '@/types';
 
 export function ProtectedRoute({
@@ -67,7 +67,7 @@ export function ProtectedRoute({
   const role = profile?.role;
   const home = getHomeForRole(role);
 
-  if (roles && profile && !roles.includes(profile.role)) {
+  if (roles && profile && !hasRequiredRoles(profile.role, roles)) {
     return <Navigate to={home} replace />;
   }
 

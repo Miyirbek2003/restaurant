@@ -28,6 +28,7 @@ import { useStockAlerts, useAcknowledgeStockAlert } from '@/hooks/useStockAlerts
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { formatCurrency } from '@/lib/utils';
+import { t, roleLabel } from '@/i18n';
 
 const statusBadge: Record<string, 'green' | 'yellow' | 'red' | 'gray'> = {
   ACTIVE: 'green',
@@ -69,7 +70,7 @@ export function EmployeesPage() {
   if (!restaurantId) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Staff</h2>
+        <h2 className="text-2xl font-bold">{t('employees.title')}</h2>
         <RestaurantRequired />
       </div>
     );
@@ -82,30 +83,30 @@ export function EmployeesPage() {
       setLastInviteUrl(getJoinUrl(invite.code));
       notify({
         type: 'success',
-        title: 'Invite created',
-        message: `Code: ${invite.code} — staff register with name only (no email).`,
+        title: t('employees.inviteCreated'),
+        message: t('employees.inviteCreatedMsg', { code: invite.code }),
       });
     } catch (err) {
-      notify({ type: 'error', title: 'Error', message: getErrorMessage(err) });
+      notify({ type: 'error', title: t('common.error'), message: getErrorMessage(err) });
     }
   };
 
   const copyLink = async (code: string) => {
     await navigator.clipboard.writeText(getJoinUrl(code));
-    notify({ type: 'success', title: 'Link copied' });
+    notify({ type: 'success', title: t('employees.linkCopied') });
   };
 
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await createStaff.mutateAsync({ name, role, phone: phone || undefined });
-      notify({ type: 'success', title: 'Staff added', message: `${name} is on your team.` });
+      notify({ type: 'success', title: t('employees.staffAdded'), message: t('employees.staffAddedMsg', { name }) });
       setAddOpen(false);
       setName('');
       setPhone('');
       setRole('WAITER');
     } catch (err) {
-      notify({ type: 'error', title: 'Error', message: getErrorMessage(err) });
+      notify({ type: 'error', title: t('common.error'), message: getErrorMessage(err) });
     }
   };
 
@@ -115,31 +116,29 @@ export function EmployeesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Staff</h2>
-          <p className="text-sm text-slate-500">
-            Waiters get a login via invite link. Kitchen staff are name-only (no app login).
-          </p>
+          <h2 className="text-2xl font-bold">{t('employees.title')}</h2>
+          <p className="text-sm text-slate-500">{t('employees.subtitle')}</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4" /> Add staff
+            <Plus className="h-4 w-4" /> {t('employees.addStaff')}
           </Button>
           <Button variant="secondary" onClick={() => setInviteOpen(true)}>
-            <Link2 className="h-4 w-4" /> Invite link
+            <Link2 className="h-4 w-4" /> {t('employees.inviteLink')}
           </Button>
         </div>
       </div>
 
       {invitesError && (
         <Card className="border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/30">
-          <p className="font-medium text-red-800 dark:text-red-200">Invites unavailable</p>
+          <p className="font-medium text-red-800 dark:text-red-200">{t('employees.invitesUnavailable')}</p>
           <p className="mt-1 text-sm text-red-700 dark:text-red-300">{getErrorMessage(invitesLoadError)}</p>
         </Card>
       )}
 
       {lastInviteUrl && (
         <Card className="border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30">
-          <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">Latest invite link</p>
+          <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">{t('employees.latestInviteLink')}</p>
           <p className="mt-1 break-all text-xs">{lastInviteUrl}</p>
           <Button
             size="sm"
@@ -147,17 +146,17 @@ export function EmployeesPage() {
             variant="secondary"
             onClick={() => {
               void navigator.clipboard.writeText(lastInviteUrl);
-              notify({ type: 'success', title: 'Link copied' });
+              notify({ type: 'success', title: t('employees.linkCopied') });
             }}
           >
-            <Copy className="h-3.5 w-3.5" /> Copy link
+            <Copy className="h-3.5 w-3.5" /> {t('employees.copyLink')}
           </Button>
         </Card>
       )}
 
       {!loadingInvites && pendingInvites.length > 0 && (
         <CollapsibleSection
-          title="Pending invites"
+          title={t('employees.pendingInvites')}
           defaultOpen={false}
           badge={<Badge color="blue" size="sm">{pendingInvites.length}</Badge>}
         >
@@ -165,10 +164,10 @@ export function EmployeesPage() {
             <table className="table-compact min-w-[480px]">
               <thead>
                 <tr>
-                  <th>Code</th>
-                  <th>Role</th>
-                  <th>Expires</th>
-                  <th>Actions</th>
+                  <th>{t('employees.code')}</th>
+                  <th>{t('employees.role')}</th>
+                  <th>{t('employees.expires')}</th>
+                  <th>{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,7 +175,7 @@ export function EmployeesPage() {
                   <tr key={inv.id}>
                     <td className="font-mono font-bold">{inv.code}</td>
                     <td>
-                      <Badge color="blue" size="sm">{inv.role}</Badge>
+                      <Badge color="blue" size="sm">{roleLabel(inv.role)}</Badge>
                     </td>
                     <td className="text-slate-500">
                       {new Date(inv.expires_at).toLocaleDateString()}
@@ -184,10 +183,10 @@ export function EmployeesPage() {
                     <td>
                       <div className="flex gap-2">
                         <Button size="sm" variant="secondary" onClick={() => copyLink(inv.code)}>
-                          Copy
+                          {t('employees.copy')}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => revokeInvite.mutate(inv.id)}>
-                          Revoke
+                          {t('employees.revoke')}
                         </Button>
                       </div>
                     </td>
@@ -201,7 +200,7 @@ export function EmployeesPage() {
 
       {pendingAlerts.length > 0 && (
         <CollapsibleSection
-          title="Stock shortage alerts"
+          title={t('employees.stockAlerts')}
           defaultOpen
           badge={<Badge color="yellow" size="sm">{pendingAlerts.length}</Badge>}
         >
@@ -214,12 +213,16 @@ export function EmployeesPage() {
                 <div className="text-sm">
                   <p className="font-medium">{a.product_name}</p>
                   <p className="text-slate-600 dark:text-slate-400">
-                    {a.staff_name ?? 'Staff'} requested {a.requested_qty}, only {a.available_qty} available.
+                    {t('employees.stockAlertLine', {
+                      staff: a.staff_name ?? t('employees.staffFallback'),
+                      requested: a.requested_qty,
+                      available: a.available_qty,
+                    })}
                   </p>
                   <p className="text-xs text-slate-400">{new Date(a.created_at).toLocaleString()}</p>
                 </div>
                 <Button size="sm" variant="secondary" onClick={() => acknowledgeAlert.mutate(a.id)}>
-                  Dismiss
+                  {t('employees.dismiss')}
                 </Button>
               </div>
             ))}
@@ -228,8 +231,8 @@ export function EmployeesPage() {
       )}
 
       <CollapsibleSection
-        title="Waiter service history"
-        description="Paid orders by waiter — tables served and totals"
+        title={t('employees.waiterHistory')}
+        description={t('employees.waiterHistoryDesc')}
         defaultOpen={false}
         badge={
           salesByWaiter.length > 0 ? (
@@ -240,14 +243,14 @@ export function EmployeesPage() {
         {loadingSales ? (
           <Spinner />
         ) : salesByWaiter.length === 0 ? (
-          <p className="text-sm text-slate-500">No paid orders linked to waiters yet.</p>
+          <p className="text-sm text-slate-500">{t('employees.noWaiterSales')}</p>
         ) : (
           <div className="space-y-3">
             {salesByWaiter.map((w) => (
               <CollapsibleSection
                 key={w.staffId}
                 title={w.staffName}
-                description={`${w.paidOrderCount} paid order(s)`}
+                description={t('employees.paidOrders', { n: w.paidOrderCount })}
                 defaultOpen={false}
                 badge={<Badge color="green" size="sm">{formatCurrency(w.totalRevenue)}</Badge>}
               >
@@ -255,10 +258,10 @@ export function EmployeesPage() {
                   <table className="table-compact min-w-[420px]">
                     <thead>
                       <tr>
-                        <th>Table</th>
-                        <th>Order #</th>
-                        <th>Paid</th>
-                        <th className="text-right">Total</th>
+                        <th>{t('orders.table')}</th>
+                        <th>{t('employees.orderNum')}</th>
+                        <th>{t('employees.paid')}</th>
+                        <th className="text-right">{t('orderDetail.total')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -276,7 +279,7 @@ export function EmployeesPage() {
                     <tfoot>
                       <tr>
                         <td colSpan={3} className="pt-1 font-semibold">
-                          Total
+                          {t('orderDetail.total')}
                         </td>
                         <td className="pt-1 text-right font-bold">{formatCurrency(w.totalRevenue)}</td>
                       </tr>
@@ -290,24 +293,24 @@ export function EmployeesPage() {
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Team members"
+        title={t('employees.teamMembers')}
         defaultOpen
         badge={<Badge color="blue" size="sm">{staff.length}</Badge>}
       >
         {isFetching ? (
           <Spinner />
         ) : staff.length === 0 ? (
-          <p className="text-slate-500">No staff yet. Add someone or send an invite link.</p>
+          <p className="text-slate-500">{t('employees.noStaff')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="table-compact min-w-[560px]">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Role</th>
-                  <th>Phone</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th>{t('common.name')}</th>
+                  <th>{t('employees.role')}</th>
+                  <th>{t('employees.phone')}</th>
+                  <th>{t('common.status')}</th>
+                  <th>{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -315,7 +318,9 @@ export function EmployeesPage() {
                   <tr key={emp.id}>
                     <td className="font-medium">{emp.name}</td>
                     <td>
-                      <Badge color="blue" size="sm">{emp.role === 'KITCHEN' ? 'Kitchen' : 'Waiter'}</Badge>
+                      <Badge color="blue" size="sm">
+                        {emp.role === 'KITCHEN' ? t('employees.kitchen') : t('employees.waiter')}
+                      </Badge>
                     </td>
                     <td className="text-slate-500">{emp.phone ?? '—'}</td>
                     <td>
@@ -331,7 +336,7 @@ export function EmployeesPage() {
                             variant="secondary"
                             onClick={() => updateStatus.mutate({ staffId: emp.id, status: 'ACTIVE' })}
                           >
-                            Activate
+                            {t('employees.activate')}
                           </Button>
                         )}
                         {emp.status === 'ACTIVE' && (
@@ -340,22 +345,22 @@ export function EmployeesPage() {
                             variant="ghost"
                             onClick={() => updateStatus.mutate({ staffId: emp.id, status: 'SUSPENDED' })}
                           >
-                            Deactivate
+                            {t('employees.deactivate')}
                           </Button>
                         )}
                         <Button
                           size="sm"
                           variant="danger"
                           onClick={() => {
-                            if (!window.confirm(`Remove ${emp.name}?`)) return;
+                            if (!window.confirm(t('employees.removeConfirm', { name: emp.name }))) return;
                             deleteStaff.mutate(emp.id, {
-                              onSuccess: () => notify({ type: 'success', title: 'Removed' }),
+                              onSuccess: () => notify({ type: 'success', title: t('employees.removed') }),
                               onError: (err) =>
-                                notify({ type: 'error', title: 'Remove failed', message: getErrorMessage(err) }),
+                                notify({ type: 'error', title: t('employees.removeFailed'), message: getErrorMessage(err) }),
                             });
                           }}
                         >
-                          Remove
+                          {t('employees.remove')}
                         </Button>
                       </div>
                     </td>
@@ -367,56 +372,54 @@ export function EmployeesPage() {
         )}
       </CollapsibleSection>
 
-      <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="Create invite link">
+      <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title={t('employees.createInviteTitle')}>
         <form onSubmit={handleCreateInvite} className="space-y-4">
-          <p className="text-sm text-slate-500">
-            Waiter invites: staff use email + password on the join page. Kitchen invites: name only.
-          </p>
+          <p className="text-sm text-slate-500">{t('employees.inviteHint')}</p>
           <Select
-            label="Role"
+            label={t('employees.role')}
             value={inviteRole}
             onChange={(e) => setInviteRole(e.target.value as StaffRole)}
             options={[
-              { value: 'WAITER', label: 'Waiter' },
-              { value: 'KITCHEN', label: 'Kitchen' },
+              { value: 'WAITER', label: t('employees.waiter') },
+              { value: 'KITCHEN', label: t('employees.kitchen') },
             ]}
           />
           <Input
-            label="Label (optional)"
+            label={t('employees.labelOptional')}
             value={inviteLabel}
             onChange={(e) => setInviteLabel(e.target.value)}
-            placeholder="e.g. Evening shift"
+            placeholder={t('employees.labelPlaceholder')}
           />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setInviteOpen(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" loading={createInvite.isPending}>
-              Generate link
+              {t('employees.generateLink')}
             </Button>
           </div>
         </form>
       </Modal>
 
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add staff member">
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title={t('employees.addMemberTitle')}>
         <form onSubmit={handleAddStaff} className="space-y-4">
-          <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
-          <Input label="Phone (optional)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input label={t('common.name')} value={name} onChange={(e) => setName(e.target.value)} required />
+          <Input label={t('employees.phoneOptional')} value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Select
-            label="Role"
+            label={t('employees.role')}
             value={role}
             onChange={(e) => setRole(e.target.value as StaffRole)}
             options={[
-              { value: 'WAITER', label: 'Waiter' },
-              { value: 'KITCHEN', label: 'Kitchen' },
+              { value: 'WAITER', label: t('employees.waiter') },
+              { value: 'KITCHEN', label: t('employees.kitchen') },
             ]}
           />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setAddOpen(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" loading={createStaff.isPending}>
-              Save
+              {t('common.save')}
             </Button>
           </div>
         </form>

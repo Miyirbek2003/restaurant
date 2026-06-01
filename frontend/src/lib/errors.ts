@@ -1,10 +1,12 @@
+import { t } from '@/i18n';
+
 export function getErrorMessage(error: unknown): string {
   const raw =
     error instanceof Error
       ? error.message
       : typeof error === 'object' && error !== null && 'message' in error
         ? String((error as { message: string }).message)
-        : 'An unexpected error occurred';
+        : t('errors.unexpected');
 
   const code =
     typeof error === 'object' && error !== null && 'code' in error
@@ -12,26 +14,64 @@ export function getErrorMessage(error: unknown): string {
       : '';
 
   if (code === '42P01' || /staff_invites|restaurant_staff|register_staff_from_invite/i.test(raw)) {
-    return 'Database migration missing. Run staff migrations through 20250531000006_waiter_auth_login.sql in Supabase SQL Editor.';
+    return t('errors.migration');
   }
   if (/row-level security/i.test(raw) || code === '42501') {
-    return `${raw} — Check that your account has restaurant_id set and role MANAGER (see Employees / Restaurant not assigned card).`;
+    return t('errors.rls', { raw });
   }
   if (/Could not find a relationship/i.test(raw)) {
-    return `${raw} — Re-run the latest SQL migrations in Supabase.`;
+    return t('errors.relationship', { raw });
+  }
+  if (raw === 'SELECT_CATEGORY') {
+    return t('errors.selectCategory');
+  }
+  if (raw === 'KITCHEN_ITEM_NOT_FOR_MENU') {
+    return t('warehouse.kitchenNotForMenu');
+  }
+  if (raw === 'ORDER_NOT_EDITABLE') {
+    return t('errors.orderNotEditable');
   }
   if (raw === 'INSUFFICIENT_STOCK') {
-    return 'Not enough product stock for this order.';
+    return t('errors.insufficientStock');
+  }
+  if (raw === 'TABLE_OCCUPIED') {
+    return t('errors.tableOccupied');
+  }
+  if (raw === 'USER_NOT_FOUND' || raw === 'PROFILE_NOT_FOUND') {
+    return t('errors.userNotFound');
+  }
+  if (raw === 'EMAIL_REQUIRED') {
+    return t('errors.emailRequired');
+  }
+  if (raw === 'MANAGER_PASSWORD_REQUIRED') {
+    return t('admin.managerCredentialsRequired');
+  }
+  if (raw === 'MANAGER_EMAIL_CONFIRM_REQUIRED') {
+    return t('admin.managerEmailConfirmRequired');
+  }
+  if (raw === 'RESTAURANT_NOT_FOUND') {
+    return t('errors.restaurantNotFound');
+  }
+  if (raw === 'CANNOT_ASSIGN_SUPER_ADMIN') {
+    return t('errors.cannotAssignSuperAdmin');
+  }
+  if (/already exists/i.test(raw)) {
+    return t('errors.userEmailExists');
   }
   if (/Insufficient stock/i.test(raw)) {
     return raw;
   }
+  if (/order_items_product_id_fkey|violates foreign key constraint.*products/i.test(raw)) {
+    return t('errors.productInOrders');
+  }
+  if (/products_category_id_fkey|violates foreign key constraint.*categories/i.test(raw)) {
+    return t('errors.categoryHasProducts');
+  }
+  if (/function.*remove_menu_product.*does not exist|record_inventory_purchase|order_items_product_name/i.test(raw) && /does not exist|column/i.test(raw)) {
+    return t('errors.migration');
+  }
   if (/rate limit|too many requests|over_email_send_rate_limit/i.test(raw) || code === 'over_email_send_rate_limit') {
-    return (
-      'Supabase blocked sending another auth email (rate limit). For testing: turn off Confirm email in ' +
-      'Authentication → Providers → Email, wait about an hour, or create the user in Authentication → Users ' +
-      'and link them with your invite code via SQL (see SETUP-WINDOWS.md).'
-    );
+    return t('errors.rateLimit');
   }
 
   return raw;
