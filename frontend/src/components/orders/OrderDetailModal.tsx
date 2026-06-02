@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { useOrder, useSaveOrderItems, useCloseOrder } from '@/hooks/useOrders';
+import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
+import { useMyStaffId } from '@/hooks/useMyStaff';
 import { PayOrderModal } from '@/components/orders/PayOrderModal';
 import { useProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,7 +22,7 @@ import {
   type DraftOrderLine,
   type ServerOrderLine,
 } from '@/lib/orderItemSave';
-import { canPlaceOrders } from '@/lib/roles';
+import { canOperateCashRegister, canPlaceOrders } from '@/lib/roles';
 import { reportStockShortage, type StockFailure } from '@/lib/stock';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
@@ -66,6 +68,9 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
   const { profile } = useAuth();
   const notify = useNotificationStore((s) => s.add);
   const mayEditRole = canPlaceOrders(profile?.role);
+  const mayPayRole = canOperateCashRegister(profile?.role);
+  const { data: openKassa } = useOpenCashRegisterSession();
+  const { data: myStaffId } = useMyStaffId();
 
   const { data: order, isLoading, isError, refetch } = useOrder(open ? orderId ?? undefined : undefined);
   const [search, setSearch] = useState('');
@@ -78,7 +83,11 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
 
   const status = order?.status as OrderStatus | undefined;
   const canEdit = Boolean(mayEditRole && status && canEditOrderItems(status));
-  const canPay = Boolean(mayEditRole && status && canPayOrder(status));
+  const isKassaOwner = Boolean(
+    openKassa &&
+      ((openKassa.opened_by_profile_id && openKassa.opened_by_profile_id === profile?.id) ||
+        (openKassa.opened_by_staff_id && myStaffId && openKassa.opened_by_staff_id === myStaffId)),
+  );
 
   const { data: products } = useProducts(search || undefined, true);
 
@@ -213,12 +222,13 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
   };
 
   const confirmPay = (grandTotal: number) => {
-    if (!order) return;
+    if (!order || !openKassa) return;
     closeOrder.mutate(
       {
         orderId: order.id,
         amount: grandTotal,
         tableId: order.table_id,
+        cashRegisterSessionId: openKassa.id,
       },
       {
         onSuccess: () => {
@@ -411,8 +421,22 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
             <Button type="button" variant="ghost" onClick={handleClose}>
               {t('common.cancel')}
             </Button>
-            {canPay && (
-              <Button type="button" onClick={() => setPayOpen(true)}>
+            {mayPayRole && status && canPayOrder(status) && (
+              <Button
+                type="button"
+                disabled={Boolean(openKassa && !isKassaOwner)}
+                onClick={() => {
+                  if (!openKassa) {
+                    notify({ type: 'warning', title: t('kassa.mustOpenFirst') });
+                    return;
+                  }
+                  if (!isKassaOwner) {
+                    notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
+                    return;
+                  }
+                  setPayOpen(true);
+                }}
+              >
                 {t('orders.pay')}
               </Button>
             )}

@@ -9,10 +9,10 @@ export function useLogin() {
   return useMutation({
     mutationFn: async (credentials: { email: string; password: string }) => {
       await signIn(credentials.email, credentials.password);
-      const { completePendingWaiterInviteIfNeeded } = await import('@/lib/staffInvite');
-      if (await completePendingWaiterInviteIfNeeded()) {
-        await refreshProfile();
-      }
+      const { completePendingWaiterInviteIfNeeded, completePendingCashierInviteIfNeeded } = await import('@/lib/staffInvite');
+      const waiterDone = await completePendingWaiterInviteIfNeeded();
+      const cashierDone = await completePendingCashierInviteIfNeeded();
+      if (waiterDone || cashierDone) await refreshProfile();
     },
     onSuccess: () => {
       addNotification({ type: 'success', title: 'Welcome back!' });

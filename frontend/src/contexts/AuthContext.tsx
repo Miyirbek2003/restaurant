@@ -141,6 +141,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               } catch (e) {
                 console.error('Pending waiter invite failed:', e);
               }
+              try {
+                const { completePendingCashierInviteIfNeeded } = await import('@/lib/staffInvite');
+                await completePendingCashierInviteIfNeeded();
+              } catch (e) {
+                console.error('Pending cashier invite failed:', e);
+              }
             }
             if (mounted) await loadProfile(s.user!.id);
           })();

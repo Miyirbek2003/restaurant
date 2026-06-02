@@ -3,7 +3,15 @@ import type { StaffRole } from '@/hooks/useEmployees';
 
 const PENDING_WAITER_INVITE_KEY = 'pending_waiter_invite';
 
+const PENDING_CASHIER_INVITE_KEY = 'pending_cashier_invite';
+
 export type PendingWaiterInvite = {
+  code: string;
+  name: string;
+  phone?: string;
+};
+
+export type PendingCashierInvite = {
   code: string;
   name: string;
   phone?: string;
@@ -31,6 +39,24 @@ export function clearPendingWaiterInvite() {
   sessionStorage.removeItem(PENDING_WAITER_INVITE_KEY);
 }
 
+export function savePendingCashierInvite(data: PendingCashierInvite) {
+  sessionStorage.setItem(PENDING_CASHIER_INVITE_KEY, JSON.stringify(data));
+}
+
+export function getPendingCashierInvite(): PendingCashierInvite | null {
+  const raw = sessionStorage.getItem(PENDING_CASHIER_INVITE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PendingCashierInvite;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingCashierInvite() {
+  sessionStorage.removeItem(PENDING_CASHIER_INVITE_KEY);
+}
+
 export async function completeWaiterInvite(code: string, name: string, phone?: string) {
   const { data, error } = await supabase.rpc('complete_waiter_invite', {
     p_code: code.trim(),
@@ -39,6 +65,22 @@ export async function completeWaiterInvite(code: string, name: string, phone?: s
   });
   if (error) throw error;
   clearPendingWaiterInvite();
+  return data as {
+    staff_id?: string;
+    restaurant_id?: string;
+    role?: StaffRole;
+    name?: string;
+  } | null;
+}
+
+export async function completeCashierInvite(code: string, name: string, phone?: string) {
+  const { data, error } = await supabase.rpc('complete_cashier_invite', {
+    p_code: code.trim(),
+    p_name: name.trim(),
+    p_phone: phone?.trim() || null,
+  });
+  if (error) throw error;
+  clearPendingCashierInvite();
   return data as {
     staff_id?: string;
     restaurant_id?: string;
@@ -72,6 +114,13 @@ export async function completePendingWaiterInviteIfNeeded(): Promise<boolean> {
   const pending = getPendingWaiterInvite();
   if (!pending) return false;
   await completeWaiterInvite(pending.code, pending.name, pending.phone);
+  return true;
+}
+
+export async function completePendingCashierInviteIfNeeded(): Promise<boolean> {
+  const pending = getPendingCashierInvite();
+  if (!pending) return false;
+  await completeCashierInvite(pending.code, pending.name, pending.phone);
   return true;
 }
 

@@ -319,7 +319,7 @@ export function EmployeesPage() {
                     <td className="font-medium">{emp.name}</td>
                     <td>
                       <Badge color="blue" size="sm">
-                        {emp.role === 'KITCHEN' ? t('employees.kitchen') : t('employees.waiter')}
+                        {roleLabel(emp.role)}
                       </Badge>
                     </td>
                     <td className="text-slate-500">{emp.phone ?? '—'}</td>
@@ -382,6 +382,7 @@ export function EmployeesPage() {
             options={[
               { value: 'WAITER', label: t('employees.waiter') },
               { value: 'KITCHEN', label: t('employees.kitchen') },
+              { value: 'CASHIER', label: t('employees.cashier') },
             ]}
           />
           <Input
@@ -412,6 +413,7 @@ export function EmployeesPage() {
             options={[
               { value: 'WAITER', label: t('employees.waiter') },
               { value: 'KITCHEN', label: t('employees.kitchen') },
+              { value: 'CASHIER', label: t('employees.cashier') },
             ]}
           />
           <div className="flex justify-end gap-2">

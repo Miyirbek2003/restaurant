@@ -18,7 +18,9 @@ import {
 } from '@/hooks/useTables';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRestaurantId } from '@/contexts/AuthContext';
-import { canPlaceOrders, isManager } from '@/lib/roles';
+import { canCreateOrders, isCashier, isManager } from '@/lib/roles';
+import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
+import { useMyStaffId } from '@/hooks/useMyStaff';
 import { FLOOR_FILTER_ALL, DEFAULT_FLOORS, floorLabel, mergeFloors, type FloorFilter } from '@/lib/floors';
 import { useRestaurantFloors, useAddRestaurantFloor } from '@/hooks/useFloors';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -36,9 +38,17 @@ const statusColor: Record<string, 'green' | 'yellow' | 'blue' | 'gray'> = {
 export function TablesPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { data: openKassa } = useOpenCashRegisterSession();
+  const { data: myStaffId } = useMyStaffId();
   const restaurantId = useRestaurantId();
   const canManage = profile?.role && isManager(profile.role);
-  const canOrder = canPlaceOrders(profile?.role);
+  const canOrder = canCreateOrders(profile?.role);
+  const isKassaOwner = Boolean(
+    openKassa &&
+      ((openKassa.opened_by_profile_id && openKassa.opened_by_profile_id === profile?.id) ||
+        (openKassa.opened_by_staff_id && myStaffId && openKassa.opened_by_staff_id === myStaffId)),
+  );
+  const cashierCreateBlocked = Boolean(profile?.role === 'CASHIER' && openKassa && !isKassaOwner);
   const { data: tables = [], isFetching, isError, error, refetch } = useTablesWithWaiters();
   const { data: configuredFloors = [...DEFAULT_FLOORS] } = useRestaurantFloors();
   const addFloor = useAddRestaurantFloor();
@@ -79,6 +89,14 @@ export function TablesPage() {
   }, [tables, floors]);
 
   const goNewOrder = (tableId?: string) => {
+    if (cashierCreateBlocked) {
+      notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
+      return;
+    }
+    if (profile?.role && isCashier(profile.role)) {
+      navigate('/orders/new');
+      return;
+    }
     navigate(tableId ? `/orders/new?table=${tableId}` : '/orders/new');
   };
 
@@ -232,7 +250,12 @@ export function TablesPage() {
               </dl>
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
                 {canOrder && table.status === 'FREE' && (
-                  <Button size="sm" className="flex-1" onClick={() => goNewOrder(table.id)}>
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    disabled={cashierCreateBlocked}
+                    onClick={() => goNewOrder(table.id)}
+                  >
                     {t('tables.newOrder')}
                   </Button>
                 )}

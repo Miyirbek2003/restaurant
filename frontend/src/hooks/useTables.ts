@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRestaurantId } from '@/contexts/AuthContext';
+import { OPEN_ORDER_STATUSES } from '@/lib/tableOrder';
 
 export type TableStatus = 'FREE' | 'OCCUPIED' | 'RESERVED' | 'CLEANING';
 
@@ -80,6 +81,26 @@ export function useTablesWithWaiters() {
         const waiterName = order?.staff_id ? staffNames[order.staff_id] ?? null : null;
         return { ...table, waiterName, openOrderId: order?.id ?? null };
       });
+    },
+  });
+}
+
+/** Table IDs that already have an open order (status not paid/cancelled). */
+export function useTableIdsWithOpenOrders() {
+  const restaurantId = useRestaurantId();
+
+  return useQuery({
+    queryKey: ['table-ids-open-orders', restaurantId],
+    enabled: Boolean(restaurantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('table_id')
+        .eq('restaurant_id', restaurantId!)
+        .in('status', [...OPEN_ORDER_STATUSES])
+        .not('table_id', 'is', null);
+      if (error) throw error;
+      return new Set((data ?? []).map((o) => o.table_id as string));
     },
   });
 }

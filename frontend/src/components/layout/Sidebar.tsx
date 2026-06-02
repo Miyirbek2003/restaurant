@@ -49,24 +49,25 @@ const navGroups: NavGroup[] = [
   },
   {
     labelKey: 'nav.menu',
-    roles: ['MANAGER', 'WAITER'],
-    items: [{ to: '/menu', labelKey: 'nav.categoriesProducts', icon: UtensilsCrossed, roles: ['MANAGER', 'WAITER'] }],
+    roles: ['MANAGER', 'WAITER', 'CASHIER'],
+    items: [{ to: '/menu', labelKey: 'nav.categoriesProducts', icon: UtensilsCrossed, roles: ['MANAGER', 'WAITER', 'CASHIER'] }],
   },
   {
     labelKey: 'nav.floor',
-    roles: ['MANAGER', 'WAITER'],
+    roles: ['MANAGER', 'WAITER', 'CASHIER'],
     items: [
-      { to: '/tables', labelKey: 'nav.tables', icon: Grid3X3, roles: ['MANAGER', 'WAITER'] },
-      { to: '/orders', labelKey: 'nav.orders', icon: ShoppingCart, roles: ['MANAGER', 'WAITER'] },
+      { to: '/tables', labelKey: 'nav.tables', icon: Grid3X3, roles: ['MANAGER', 'WAITER', 'CASHIER'] },
+      { to: '/orders', labelKey: 'nav.orders', icon: ShoppingCart, roles: ['MANAGER', 'WAITER', 'CASHIER'] },
     ],
   },
   {
     labelKey: 'nav.backOffice',
-    roles: ['MANAGER'],
+    roles: ['MANAGER', 'CASHIER'],
     items: [
-      { to: '/inventory', labelKey: 'nav.warehouse', icon: Package, roles: ['MANAGER'] },
-      { to: '/expenses', labelKey: 'nav.expenses', icon: Receipt, roles: ['MANAGER'] },
-      { to: '/incomes', labelKey: 'nav.incomes', icon: Banknote, roles: ['MANAGER'] },
+      { to: '/inventory', labelKey: 'nav.warehouse', icon: Package, roles: ['MANAGER', 'CASHIER'] },
+      { to: '/expenses', labelKey: 'nav.expenses', icon: Receipt, roles: ['MANAGER', 'CASHIER'] },
+      { to: '/incomes', labelKey: 'nav.incomes', icon: Banknote, roles: ['MANAGER', 'CASHIER'] },
+      { to: '/kassa', labelKey: 'nav.kassa', icon: Wallet, roles: ['MANAGER', 'CASHIER'] },
     ],
   },
   {

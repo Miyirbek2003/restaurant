@@ -13,7 +13,7 @@ export function getErrorMessage(error: unknown): string {
       ? String((error as { code: string }).code)
       : '';
 
-  if (code === '42P01' || /staff_invites|restaurant_staff|register_staff_from_invite/i.test(raw)) {
+  if (code === '42P01' || /staff_invites|restaurant_staff|register_staff_from_invite|cash_register_closures/i.test(raw)) {
     return t('errors.migration');
   }
   if (/row-level security/i.test(raw) || code === '42501') {
@@ -36,6 +36,18 @@ export function getErrorMessage(error: unknown): string {
   }
   if (raw === 'TABLE_OCCUPIED') {
     return t('errors.tableOccupied');
+  }
+  if (raw === 'CASH_REGISTER_ALREADY_OPEN') {
+    return t('errors.cashRegisterAlreadyOpen');
+  }
+  if (raw === 'PAYMENT_TOTAL_MISMATCH') {
+    return t('errors.paymentTotalMismatch');
+  }
+  if (raw === 'CASH_REGISTER_OPENED_BY_ANOTHER_CASHIER') {
+    return t('errors.cashRegisterOpenedByAnotherCashier');
+  }
+  if (raw === 'CASH_REGISTER_NOT_OPEN') {
+    return t('errors.cashRegisterNotOpen');
   }
   if (raw === 'USER_NOT_FOUND' || raw === 'PROFILE_NOT_FOUND') {
     return t('errors.userNotFound');

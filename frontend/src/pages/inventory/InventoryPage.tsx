@@ -29,7 +29,7 @@ import { useCategories } from '@/hooks/useProducts';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { formatCurrency } from '@/lib/utils';
-import { defaultDateRangeDays, matchesDateRange, matchesSearch } from '@/lib/filters';
+import { defaultDateRangeMonth, matchesDateRange, matchesSearch } from '@/lib/filters';
 import { ListFilters, type ListFiltersValue } from '@/components/ui/ListFilters';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { t, inventoryUnit, expenseCategory } from '@/i18n';
@@ -64,7 +64,7 @@ export function InventoryPage() {
     category: '',
   });
   const [historyFilters, setHistoryFilters] = useState<ListFiltersValue>(() => {
-    const range = defaultDateRangeDays(90);
+    const range = defaultDateRangeMonth();
     return { search: '', dateFrom: range.from, dateTo: range.to };
   });
 

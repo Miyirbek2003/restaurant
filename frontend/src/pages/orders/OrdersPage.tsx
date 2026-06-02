@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
@@ -7,17 +7,20 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { PayOrderModal } from '@/components/orders/PayOrderModal';
 import { OrderDetailModal } from '@/components/orders/OrderDetailModal';
+import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
 import { useOrders, useSendToKitchen, useCloseOrder, useUpdateOrderStatus } from '@/hooks/useOrders';
+import { useMyStaffId } from '@/hooks/useMyStaff';
+import type { PaymentLine } from '@/lib/payments';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { getWaiterName } from '@/lib/orderUtils';
 import { canEditOrderItems, canPayOrder } from '@/lib/orderEdit';
-import { canPlaceOrders } from '@/lib/roles';
+import { canCreateOrders, canPlaceOrders, canOperateCashRegister } from '@/lib/roles';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { reportStockShortage, type StockFailure } from '@/lib/stock';
 import { t, orderStatus } from '@/i18n';
-import { defaultDateRangeDays, matchesDateRange, matchesSearch } from '@/lib/filters';
+import { defaultDateRangeMonth, matchesDateRange, matchesSearch } from '@/lib/filters';
 import { ListFilters, type ListFiltersValue } from '@/components/ui/ListFilters';
 import type { OrderStatus } from '@/types';
 
@@ -86,8 +89,11 @@ function kitchenAction(
 
 export function OrdersPage() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const notify = useNotificationStore((s) => s.add);
 
+  const { data: openKassa } = useOpenCashRegisterSession();
+  const { data: myStaffId } = useMyStaffId();
   const { data: orders, isLoading } = useOrders();
   const sendKitchen = useSendToKitchen();
   const closeOrder = useCloseOrder();
@@ -95,12 +101,32 @@ export function OrdersPage() {
 
   const [view, setView] = useState<ViewFilter>('active');
   const [filters, setFilters] = useState<ListFiltersValue>(() => {
-    const range = defaultDateRangeDays(30);
+    const range = defaultDateRangeMonth();
     return { search: '', dateFrom: range.from, dateTo: range.to };
   });
   const [payOrder, setPayOrder] = useState<OrderRow | null>(null);
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
   const canUpdateItems = canPlaceOrders(profile?.role);
+  const canPay = canOperateCashRegister(profile?.role);
+  const isKassaOwner = Boolean(
+    openKassa &&
+      ((openKassa.opened_by_profile_id && openKassa.opened_by_profile_id === profile?.id) ||
+        (openKassa.opened_by_staff_id && myStaffId && openKassa.opened_by_staff_id === myStaffId)),
+  );
+  const cashierCreateBlocked = Boolean(profile?.role === 'CASHIER' && openKassa && !isKassaOwner);
+
+  const startPay = (order: OrderRow) => {
+    if (!openKassa) {
+      notify({ type: 'warning', title: t('kassa.mustOpenFirst') });
+      navigate('/kassa');
+      return;
+    }
+    if (!isKassaOwner) {
+      notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
+      return;
+    }
+    setPayOrder(order);
+  };
 
   const orderList = (orders ?? []) as OrderRow[];
 
@@ -161,13 +187,15 @@ export function OrdersPage() {
     });
   };
 
-  const confirmPay = (grandTotal: number) => {
-    if (!payOrder) return;
+  const confirmPay = (grandTotal: number, payments: PaymentLine[]) => {
+    if (!payOrder || !openKassa) return;
     closeOrder.mutate(
       {
         orderId: payOrder.id,
         amount: grandTotal,
+        payments,
         tableId: payOrder.table_id,
+        cashRegisterSessionId: openKassa.id,
       },
       {
         onSuccess: () => {
@@ -187,11 +215,13 @@ export function OrdersPage() {
           <h2 className="page-title">{t('orders.title')}</h2>
           <p className="text-sm text-slate-500">{t('orders.subtitle')}</p>
         </div>
-        <Link to="/orders/new">
-          <Button>
-            <Plus className="h-4 w-4" /> {t('orders.newOrder')}
-          </Button>
-        </Link>
+        {canCreateOrders(profile?.role) && !cashierCreateBlocked && (
+          <Link to="/orders/new">
+            <Button>
+              <Plus className="h-4 w-4" /> {t('orders.newOrder')}
+            </Button>
+          </Link>
+        )}
       </div>
 
       <ListFilters
@@ -228,6 +258,7 @@ export function OrdersPage() {
             const action = kitchenAction(order.status);
             const items = order.order_items ?? [];
             const tableName = order.tables?.name ?? t('common.takeaway');
+            const isTakeaway = !order.tables?.name;
 
             return (
               <div
@@ -235,12 +266,20 @@ export function OrdersPage() {
                 className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">
-                      #{order.order_number}
-                      <span className="ml-2 font-normal text-slate-500">· {tableName}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                      {t('orders.orderNumber', { n: order.order_number })}
                     </p>
-                    <p className="text-sm text-slate-500">{getWaiterName(order)}</p>
+                    <p
+                      className={
+                        isTakeaway
+                          ? 'mt-1 text-lg font-semibold text-slate-600 dark:text-slate-300'
+                          : 'mt-1 text-2xl font-bold tracking-tight text-primary-700 dark:text-primary-300'
+                      }
+                    >
+                      {tableName}
+                    </p>
+                    <p className="mt-0.5 text-sm text-slate-500">{getWaiterName(order)}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge color={statusColor[order.status] ?? 'gray'} size="sm">
@@ -289,8 +328,8 @@ export function OrdersPage() {
                       {action.label}
                     </Button>
                   )}
-                  {canPlaceOrders(profile?.role) && canPayOrder(order.status) && (
-                    <Button size="sm" onClick={() => setPayOrder(order)}>
+                  {canPay && canPayOrder(order.status) && (
+                    <Button size="sm" disabled={Boolean(openKassa && !isKassaOwner)} onClick={() => startPay(order)}>
                       {t('orders.pay')}
                     </Button>
                   )}

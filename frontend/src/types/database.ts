@@ -1,7 +1,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-export type UserRole = 'SUPER_ADMIN' | 'MANAGER' | 'WAITER' | 'KITCHEN';
-export type StaffRole = 'WAITER' | 'KITCHEN';
+export type UserRole = 'SUPER_ADMIN' | 'MANAGER' | 'WAITER' | 'KITCHEN' | 'CASHIER';
+export type StaffRole = 'WAITER' | 'KITCHEN' | 'CASHIER';
 export type OrderStatus = 'DRAFT' | 'NEW' | 'PREPARING' | 'READY' | 'SERVED' | 'PAID' | 'CANCELLED';
 export type TableStatus = 'FREE' | 'OCCUPIED' | 'RESERVED' | 'CLEANING';
 

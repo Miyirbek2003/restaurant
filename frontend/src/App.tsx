@@ -22,13 +22,16 @@ import { SalariesPage } from '@/pages/salaries/SalariesPage';
 import { CustomersPage } from '@/pages/customers/CustomersPage';
 import { DiscountsPage } from '@/pages/discounts/DiscountsPage';
 import { EmployeesPage } from '@/pages/employees/EmployeesPage';
+import { KassaPage } from '@/pages/kassa/KassaPage';
 import type { UserRole } from '@/types';
 import { getHomeForRole } from '@/lib/roles';
 import { useAuth } from '@/contexts/AuthContext';
 
-const managerOnly: UserRole[] = ['MANAGER'];
+const managerOnly: UserRole[] = ['MANAGER', 'CASHIER'];
 const waiterOnly: UserRole[] = ['WAITER'];
-const waiterAndManager: UserRole[] = ['WAITER', 'MANAGER'];
+const waiterAndManager: UserRole[] = ['WAITER', 'MANAGER', 'CASHIER'];
+const cashierAndWaiterAndManager: UserRole[] = ['WAITER', 'MANAGER', 'CASHIER'];
+const cashierAndManager: UserRole[] = ['CASHIER', 'MANAGER', 'SUPER_ADMIN'];
 const adminOnly: UserRole[] = ['SUPER_ADMIN'];
 
 function CatchAllRedirect() {
@@ -68,10 +71,11 @@ export default function App() {
         <Route path="menu/categories" element={<Navigate to="/menu" replace />} />
         <Route path="menu/products" element={<Navigate to="/menu" replace />} />
 
-        <Route path="tables" element={<ProtectedRoute roles={waiterAndManager}><TablesPage /></ProtectedRoute>} />
-        <Route path="orders" element={<ProtectedRoute roles={waiterAndManager}><OrdersPage /></ProtectedRoute>} />
+        <Route path="tables" element={<ProtectedRoute roles={cashierAndWaiterAndManager}><TablesPage /></ProtectedRoute>} />
+        <Route path="orders" element={<ProtectedRoute roles={cashierAndWaiterAndManager}><OrdersPage /></ProtectedRoute>} />
         <Route path="orders/new" element={<ProtectedRoute roles={waiterAndManager}><CreateOrderPage /></ProtectedRoute>} />
         <Route path="orders/:id/edit" element={<ProtectedRoute roles={waiterAndManager}><EditOrderPage /></ProtectedRoute>} />
+        <Route path="kassa" element={<ProtectedRoute roles={cashierAndManager}><KassaPage /></ProtectedRoute>} />
 
         <Route path="kitchen" element={<Navigate to="/orders" replace />} />
 

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRestaurantId, useAuth } from '@/contexts/AuthContext';
-import { isWaiter } from '@/lib/roles';
+import { isCashier, isWaiter } from '@/lib/roles';
 import { fetchMyStaffId } from '@/lib/staffInvite';
 import {
   validateOrderStock,
@@ -26,6 +26,9 @@ function invalidateOrderQueries(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: ['order'] });
   void qc.invalidateQueries({ queryKey: ['kitchen-queue'] });
   void qc.invalidateQueries({ queryKey: ['tables-with-waiters'] });
+  void qc.invalidateQueries({ queryKey: ['tables'] });
+  void qc.invalidateQueries({ queryKey: ['table-ids-open-orders'] });
+  void qc.invalidateQueries({ queryKey: ['open-orders-count'] });
   void qc.invalidateQueries({ queryKey: ['products'] });
   void qc.invalidateQueries({ queryKey: ['inventory_items'] });
   void qc.invalidateQueries({ queryKey: ['warehouse-product-ids'] });
@@ -524,6 +527,29 @@ export function useCreateOrderWithItems() {
       items: { product_id: string; quantity: number }[];
       sendToKitchen?: boolean;
     }) => {
+      if (profile?.role && isCashier(profile.role)) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const { data: session, error: sessionErr } = await supabase
+          .from('cash_register_sessions')
+          .select('opened_by_profile_id, opened_by_staff_id, status')
+          .eq('restaurant_id', restaurantId!)
+          .eq('status', 'OPEN')
+          .maybeSingle();
+        if (sessionErr) throw sessionErr;
+        if (session) {
+          let myStaffId: string | null = null;
+          if (session.opened_by_staff_id) {
+            myStaffId = await fetchMyStaffId();
+          }
+          const isOwner =
+            (session.opened_by_profile_id && session.opened_by_profile_id === user?.id) ||
+            (session.opened_by_staff_id && myStaffId && session.opened_by_staff_id === myStaffId);
+          if (!isOwner) throw new Error('CASH_REGISTER_OPENED_BY_ANOTHER_CASHIER');
+        }
+      }
+
       let staffId = body.staff_id ?? null;
       if (!staffId && profile?.role && isWaiter(profile.role)) {
         staffId = await fetchMyStaffId();
@@ -612,22 +638,60 @@ export function useCloseOrder() {
     mutationFn: async ({
       orderId,
       amount,
-      method = 'CASH',
+      payments,
       tableId,
+      cashRegisterSessionId,
     }: {
       orderId: string;
       amount: number;
-      method?: string;
+      payments?: { method: string; amount: number }[];
       tableId?: string | null;
+      cashRegisterSessionId?: string | null;
     }) => {
-      const { error: payErr } = await supabase.from('payments').insert({
-        restaurant_id: restaurantId!,
-        order_id: orderId,
-        amount,
-        method,
-        status: 'COMPLETED',
-      });
-      if (payErr) throw payErr;
+      const lines =
+        payments && payments.length > 0
+          ? payments
+          : [{ method: 'CASH', amount }];
+
+      const sum = lines.reduce((s, l) => s + Number(l.amount), 0);
+      if (Math.abs(sum - amount) > 0.01) {
+        throw new Error('PAYMENT_TOTAL_MISMATCH');
+      }
+
+      if (cashRegisterSessionId) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const { data: session, error: sessionErr } = await supabase
+          .from('cash_register_sessions')
+          .select('id, status, opened_by_profile_id, opened_by_staff_id')
+          .eq('id', cashRegisterSessionId)
+          .eq('restaurant_id', restaurantId!)
+          .maybeSingle();
+        if (sessionErr) throw sessionErr;
+        if (!session || session.status !== 'OPEN') throw new Error('CASH_REGISTER_NOT_OPEN');
+
+        let staffId: string | null = null;
+        if (session.opened_by_staff_id) {
+          staffId = await fetchMyStaffId();
+        }
+        const isOwner =
+          (session.opened_by_profile_id && session.opened_by_profile_id === user?.id) ||
+          (session.opened_by_staff_id && staffId && session.opened_by_staff_id === staffId);
+        if (!isOwner) throw new Error('CASH_REGISTER_OPENED_BY_ANOTHER_CASHIER');
+      }
+
+      for (const line of lines) {
+        const { error: payErr } = await supabase.from('payments').insert({
+          restaurant_id: restaurantId!,
+          order_id: orderId,
+          amount: line.amount,
+          method: line.method,
+          status: 'COMPLETED',
+          cash_register_session_id: cashRegisterSessionId ?? null,
+        });
+        if (payErr) throw payErr;
+      }
 
       const { data, error } = await supabase
         .from('orders')
@@ -649,6 +713,9 @@ export function useCloseOrder() {
       qc.invalidateQueries({ queryKey: ['tables-with-waiters'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['waiter-paid-orders'] });
+      qc.invalidateQueries({ queryKey: ['incomes'] });
+      qc.invalidateQueries({ queryKey: ['cash-register-session-totals'] });
+      qc.invalidateQueries({ queryKey: ['cash-register-open'] });
     },
   });
 }

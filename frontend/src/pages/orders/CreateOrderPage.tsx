@@ -8,11 +8,13 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { useProducts } from '@/hooks/useProducts';
-import { useTables } from '@/hooks/useTables';
+import { useTables, useTableIdsWithOpenOrders } from '@/hooks/useTables';
 import { useWaiters } from '@/hooks/useEmployees';
 import { useCreateOrderWithItems } from '@/hooks/useOrders';
+import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
+import { useMyStaffId } from '@/hooks/useMyStaff';
 import { useAuth } from '@/contexts/AuthContext';
-import { isManager, isWaiter } from '@/lib/roles';
+import { isCashier, isManager, isWaiter } from '@/lib/roles';
 import { cn, formatCurrency } from '@/lib/utils';
 import { cartQtyForProduct, reportStockShortage, type StockFailure } from '@/lib/stock';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -43,6 +45,7 @@ export function CreateOrderPage() {
   const notify = useNotificationStore((s) => s.add);
   const isWaiterUser = profile?.role && isWaiter(profile.role);
   const isManagerUser = profile?.role && isManager(profile.role);
+  const isCashierUser = profile?.role && isCashier(profile.role);
   const [search, setSearch] = useState('');
   const [tableId, setTableId] = useState(searchParams.get('table') ?? '');
   const [staffId, setStaffId] = useState('');
@@ -51,31 +54,46 @@ export function CreateOrderPage() {
 
   const { data: products, isLoading: loadingProducts } = useProducts(search || undefined, true);
   const { data: tables, isLoading: loadingTables } = useTables();
+  const { data: openOrderTableIds } = useTableIdsWithOpenOrders();
   const { data: waiters, isLoading: loadingWaiters } = useWaiters();
+  const { data: openKassa } = useOpenCashRegisterSession();
+  const { data: myStaffId } = useMyStaffId();
   const createOrder = useCreateOrderWithItems();
+  const isCashierBlockedByAnotherKassa = Boolean(
+    isCashierUser &&
+      openKassa &&
+      !(
+        (openKassa.opened_by_profile_id && openKassa.opened_by_profile_id === profile?.id) ||
+        (openKassa.opened_by_staff_id && myStaffId && openKassa.opened_by_staff_id === myStaffId)
+      ),
+  );
 
   const availableTables = useMemo(
-    () => (tables ?? []).filter((tbl) => isTableAvailableForNewOrder(tbl)),
-    [tables],
+    () => (tables ?? []).filter((tbl) => isTableAvailableForNewOrder(tbl, openOrderTableIds)),
+    [tables, openOrderTableIds],
   );
 
   useEffect(() => {
+    if (isCashierUser) {
+      setTableId('');
+      return;
+    }
     const tbl = searchParams.get('table');
     if (!tbl) return;
     if (!tables) return;
     const selected = tables.find((t) => t.id === tbl);
-    if (selected && isTableAvailableForNewOrder(selected)) {
+    if (selected && isTableAvailableForNewOrder(selected, openOrderTableIds)) {
       setTableId(tbl);
       return;
     }
-    if (selected && !isTableAvailableForNewOrder(selected)) {
+    if (selected && !isTableAvailableForNewOrder(selected, openOrderTableIds)) {
       setTableId('');
       notify({
         type: 'warning',
         title: t('orders.tableOccupiedCannotOrder'),
       });
     }
-  }, [searchParams, tables, notify]);
+  }, [isCashierUser, searchParams, tables, openOrderTableIds, notify]);
 
   const activeWaiters = useMemo(
     () => (waiters ?? []).filter((w) => w.status === 'ACTIVE'),
@@ -167,6 +185,10 @@ export function CreateOrderPage() {
   };
 
   const submit = async (sendToKitchen: boolean) => {
+    if (isCashierBlockedByAnotherKassa) {
+      notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
+      return;
+    }
     if (cart.length === 0) {
       notify({ type: 'warning', title: t('orders.addOneProduct') });
       return;
@@ -175,16 +197,19 @@ export function CreateOrderPage() {
       notify({ type: 'warning', title: t('orders.selectWaiter') });
       return;
     }
-    if (tableId) {
+    if (isCashierUser && tableId) {
+      setTableId('');
+    }
+    if (!isCashierUser && tableId) {
       const selected = (tables ?? []).find((tbl) => tbl.id === tableId);
-      if (!selected || !isTableAvailableForNewOrder(selected)) {
+      if (!selected || !isTableAvailableForNewOrder(selected, openOrderTableIds)) {
         notify({ type: 'warning', title: t('orders.tableOccupiedCannotOrder') });
         return;
       }
     }
     try {
       await createOrder.mutateAsync({
-        table_id: tableId || undefined,
+        table_id: isCashierUser ? undefined : tableId || undefined,
         staff_id: staffId || undefined,
         notes: notes || undefined,
         items: cart.map((c) => ({ product_id: c.product_id, quantity: c.quantity })),
@@ -193,7 +218,6 @@ export function CreateOrderPage() {
       notify({
         type: 'success',
         title: sendToKitchen ? t('orders.orderSentKitchen') : t('orders.orderSavedDraft'),
-        message: tableId ? t('orders.tableOccupied') : undefined,
       });
       navigate('/orders');
     } catch (err) {
@@ -278,7 +302,7 @@ export function CreateOrderPage() {
             <Button
               variant="secondary"
               className="w-full"
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || isCashierBlockedByAnotherKassa}
               loading={createOrder.isPending}
               onClick={() => submit(false)}
             >
@@ -286,7 +310,7 @@ export function CreateOrderPage() {
             </Button>
             <Button
               className="w-full"
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || isCashierBlockedByAnotherKassa}
               loading={createOrder.isPending}
               onClick={() => submit(true)}
             >
@@ -310,7 +334,7 @@ export function CreateOrderPage() {
           <Button
             variant="secondary"
             className="w-full"
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || isCashierBlockedByAnotherKassa}
             loading={createOrder.isPending}
             onClick={() => submit(false)}
           >
@@ -318,7 +342,7 @@ export function CreateOrderPage() {
           </Button>
           <Button
             className="w-full"
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || isCashierBlockedByAnotherKassa}
             loading={createOrder.isPending}
             onClick={() => submit(true)}
           >
@@ -340,7 +364,19 @@ export function CreateOrderPage() {
       <div className="grid gap-4 lg:grid-cols-3 lg:gap-6">
         <div className="space-y-4 lg:col-span-2">
           <Card className="space-y-4">
-            <Select label={t('orders.table')} value={tableId} onChange={(e) => setTableId(e.target.value)} options={tableOptions} />
+            {isCashierBlockedByAnotherKassa && (
+              <p className="text-sm text-amber-600">{t('kassa.openedByAnotherCashier')}</p>
+            )}
+            {isCashierUser ? (
+              <p className="text-sm text-slate-500">{t('orders.cashierTakeawayOnly')}</p>
+            ) : (
+              <Select
+                label={t('orders.table')}
+                value={tableId}
+                onChange={(e) => setTableId(e.target.value)}
+                options={tableOptions}
+              />
+            )}
             {isManagerUser && waiterOptions.length > 0 && (
               <Select
                 label={t('orders.waiter')}

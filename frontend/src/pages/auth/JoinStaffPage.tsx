@@ -13,8 +13,10 @@ import { getErrorMessage } from '@/lib/errors';
 import { t } from '@/i18n';
 import {
   completeWaiterInvite,
+  completeCashierInvite,
   registerStaffFromInvite,
   savePendingWaiterInvite,
+  savePendingCashierInvite,
   isAlreadyRegisteredError,
 } from '@/lib/staffInvite';
 
@@ -35,6 +37,8 @@ export function JoinStaffPage() {
 
   const { data: preview, isFetching, isError } = usePreviewInvite(code);
   const isWaiterInvite = preview?.role === 'WAITER';
+  const isCashierInvite = preview?.role === 'CASHIER';
+  const needsEmailSignup = isWaiterInvite || isCashierInvite;
 
   useEffect(() => {
     const c = params.get('code');
@@ -45,6 +49,12 @@ export function JoinStaffPage() {
     await completeWaiterInvite(inviteCode, name, phone);
     await refreshProfile();
     navigate(getHomeForRole('WAITER'), { replace: true });
+  };
+
+  const finishCashierJoin = async (inviteCode: string) => {
+    await completeCashierInvite(inviteCode, name, phone);
+    await refreshProfile();
+    navigate(getHomeForRole('CASHIER'), { replace: true });
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -67,7 +77,7 @@ export function JoinStaffPage() {
 
     setSubmitting(true);
     try {
-      if (isWaiterInvite) {
+      if (needsEmailSignup) {
         const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -83,14 +93,22 @@ export function JoinStaffPage() {
             if (signInErr) {
               throw new Error(t('join.emailExists'));
             }
-            await finishWaiterJoin(inviteCode);
+            if (isCashierInvite) {
+              await finishCashierJoin(inviteCode);
+            } else {
+              await finishWaiterJoin(inviteCode);
+            }
             return;
           }
           throw signUpErr;
         }
 
         if (!signUpData.session) {
-          savePendingWaiterInvite({ code: inviteCode, name, phone });
+          if (isCashierInvite) {
+            savePendingCashierInvite({ code: inviteCode, name, phone });
+          } else {
+            savePendingWaiterInvite({ code: inviteCode, name, phone });
+          }
           setStatus({
             type: 'info',
             title: t('join.confirmEmail'),
@@ -99,7 +117,11 @@ export function JoinStaffPage() {
           return;
         }
 
-        await finishWaiterJoin(inviteCode);
+        if (isCashierInvite) {
+          await finishCashierJoin(inviteCode);
+        } else {
+          await finishWaiterJoin(inviteCode);
+        }
         return;
       }
 
@@ -165,9 +187,9 @@ export function JoinStaffPage() {
           <p className="rounded-lg bg-primary-50 p-3 text-sm text-primary-800 dark:bg-primary-900/30 dark:text-primary-200">
             {t('join.joiningLine', {
               restaurant: preview.restaurant_name,
-              role: isWaiterInvite ? t('employees.waiter') : t('employees.kitchen'),
+            role: isCashierInvite ? t('employees.cashier') : isWaiterInvite ? t('employees.waiter') : t('employees.kitchen'),
             })}
-            {isWaiterInvite && <> — {t('join.waiterHint')}</>}
+          {isWaiterInvite && <> — {t('join.waiterHint')}</>}
           </p>
         )}
         {code.length >= 4 && isError && !isFetching && (
@@ -176,7 +198,7 @@ export function JoinStaffPage() {
 
         <form onSubmit={handleRegister} className="space-y-4">
           <Input label={t('join.yourName')} value={name} onChange={(e) => setName(e.target.value)} required />
-          {isWaiterInvite && (
+          {needsEmailSignup && (
             <>
               <Input
                 label={t('auth.email')}
@@ -200,9 +222,9 @@ export function JoinStaffPage() {
             type="submit"
             className="w-full"
             loading={submitting}
-            disabled={!preview || isFetching || (status?.type === 'success' && !isWaiterInvite)}
+            disabled={!preview || isFetching || (status?.type === 'success' && !needsEmailSignup)}
           >
-            {isWaiterInvite ? t('join.createAndJoin') : t('join.register')}
+            {needsEmailSignup ? t('join.createAndJoin') : t('join.register')}
           </Button>
         </form>
 

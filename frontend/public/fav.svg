@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="RestoPOS">
+  <rect width="64" height="64" rx="14" fill="#0f172a" />
+  <path d="M20 17h9a10 10 0 0 1 0 20h-5v10h-4V17zm4 4v12h5a6 6 0 0 0 0-12h-5z" fill="#22c55e" />
+  <path d="M38 17h4v30h-4zM45 17h4v30h-4z" fill="#38bdf8" />
+</svg>

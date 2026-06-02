@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -10,10 +10,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useResourceInsert, useResourceUpdate, useResourceDelete } from '@/hooks/useResource';
 import { useExpensesList } from '@/hooks/useExpenses';
 import { useEmployees } from '@/hooks/useEmployees';
+import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
+import { useMyStaffId } from '@/hooks/useMyStaff';
+import { useAuth } from '@/contexts/AuthContext';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { formatCurrency } from '@/lib/utils';
-import { defaultDateRangeDays, matchesDateRange, matchesSearch } from '@/lib/filters';
+import { defaultDateRangeMonth, lastDaysRange, matchesDateRange, matchesSearch, todayRange, yesterdayRange } from '@/lib/filters';
 import { ListFilters, type ListFiltersValue } from '@/components/ui/ListFilters';
 import { t, expenseCategory } from '@/i18n';
 
@@ -45,18 +48,23 @@ const emptyForm = (): ExpenseForm => ({
 });
 
 export function ExpensesPage() {
+  const pageSize = 10;
+  const { profile } = useAuth();
   const { data = [], isLoading } = useExpensesList();
   const { data: employees = [] } = useEmployees();
+  const { data: openKassa } = useOpenCashRegisterSession();
+  const { data: myStaffId } = useMyStaffId();
   const insert = useResourceInsert('expenses');
   const update = useResourceUpdate('expenses');
   const remove = useResourceDelete('expenses');
   const notify = useNotificationStore((s) => s.add);
 
   const [open, setOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(pageSize);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<ExpenseForm>(emptyForm());
   const [filters, setFilters] = useState<ListFiltersValue>(() => {
-    const range = defaultDateRangeDays(90);
+    const range = defaultDateRangeMonth();
     return { search: '', dateFrom: range.from, dateTo: range.to, category: '' };
   });
 
@@ -82,11 +90,28 @@ export function ExpensesPage() {
     () => filtered.reduce((sum, row) => sum + Number(row.amount), 0),
     [filtered],
   );
+  const paged = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
 
   const staffOptions = employees.map((e) => ({ value: e.id, label: e.name }));
   const isSalary = form.category === 'SALARIES';
+  const isKassaOwner = Boolean(
+    openKassa &&
+      ((openKassa.opened_by_profile_id && openKassa.opened_by_profile_id === profile?.id) ||
+        (openKassa.opened_by_staff_id && myStaffId && openKassa.opened_by_staff_id === myStaffId)),
+  );
+  const cashierCreateBlocked = Boolean(profile?.role === 'CASHIER' && openKassa && !isKassaOwner);
+  useEffect(() => {
+    setVisibleCount(pageSize);
+  }, [filters.search, filters.dateFrom, filters.dateTo, filters.category]);
+
+  const applyRange = (range: { from: string; to: string }) =>
+    setFilters((prev) => ({ ...prev, dateFrom: range.from, dateTo: range.to }));
 
   const openAdd = () => {
+    if (cashierCreateBlocked) {
+      notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
+      return;
+    }
     setEditId(null);
     setForm(emptyForm());
     setOpen(true);
@@ -127,6 +152,10 @@ export function ExpensesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editId && cashierCreateBlocked) {
+      notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
+      return;
+    }
     if (isSalary && !form.staff_id) {
       notify({ type: 'warning', title: t('expenses.selectEmployee') });
       return;
@@ -157,10 +186,11 @@ export function ExpensesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">{t('expenses.title')}</h2>
-        <Button onClick={openAdd}>
+        <Button onClick={openAdd} disabled={cashierCreateBlocked}>
           <Plus className="h-4 w-4" /> {t('expenses.add')}
         </Button>
       </div>
+      {cashierCreateBlocked && <p className="text-sm text-amber-600">{t('kassa.openedByAnotherCashier')}</p>}
 
       <ListFilters
         value={filters}
@@ -169,6 +199,17 @@ export function ExpensesPage() {
         categoryOptions={CATEGORY_FILTER_OPTIONS}
         categoryLabel={t('expenses.category')}
       />
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onClick={() => applyRange(todayRange())}>
+          {t('filters.today')}
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => applyRange(yesterdayRange())}>
+          {t('filters.yesterday')}
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => applyRange(lastDaysRange(7))}>
+          {t('filters.last7Days')}
+        </Button>
+      </div>
 
       <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30">
         <p className="text-sm text-slate-600 dark:text-slate-400">{t('expenses.totalForPeriod')}</p>
@@ -184,7 +225,7 @@ export function ExpensesPage() {
         <EmptyState title={t('filters.noResults')} />
       ) : (
         <div className="space-y-3">
-          {filtered.map((row) => (
+          {paged.map((row) => (
             <Card key={row.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold">{row.title}</p>
@@ -212,6 +253,16 @@ export function ExpensesPage() {
               </div>
             </Card>
           ))}
+          <div className="flex justify-center pt-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={visibleCount >= filtered.length}
+              onClick={() => setVisibleCount((v) => Math.min(v + pageSize, filtered.length))}
+            >
+              {t('common.next')}
+            </Button>
+          </div>
         </div>
       )}
 

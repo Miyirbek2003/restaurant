@@ -28,3 +28,42 @@ export function defaultDateRangeDays(days: number): { from: string; to: string }
     to: to.toISOString().slice(0, 10),
   };
 }
+
+/** First and last day of the current calendar month (local time). */
+export function defaultDateRangeMonth(ref = new Date()): { from: string; to: string } {
+  const year = ref.getFullYear();
+  const month = ref.getMonth();
+  const from = new Date(year, month, 1);
+  const to = new Date(year, month + 1, 0);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    from: `${from.getFullYear()}-${pad(from.getMonth() + 1)}-${pad(from.getDate())}`,
+    to: `${to.getFullYear()}-${pad(to.getMonth() + 1)}-${pad(to.getDate())}`,
+  };
+}
+
+export function dateToIsoDay(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function todayRange(ref = new Date()): { from: string; to: string } {
+  const day = dateToIsoDay(ref);
+  return { from: day, to: day };
+}
+
+export function yesterdayRange(ref = new Date()): { from: string; to: string } {
+  const d = new Date(ref);
+  d.setDate(d.getDate() - 1);
+  const day = dateToIsoDay(d);
+  return { from: day, to: day };
+}
+
+export function lastDaysRange(days: number, ref = new Date()): { from: string; to: string } {
+  const to = new Date(ref);
+  const from = new Date(ref);
+  from.setDate(from.getDate() - (days - 1));
+  return { from: dateToIsoDay(from), to: dateToIsoDay(to) };
+}

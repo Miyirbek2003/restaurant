@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useRestaurantId } from '@/contexts/AuthContext';
 
-export type StaffRole = 'WAITER' | 'KITCHEN';
+export type StaffRole = 'WAITER' | 'KITCHEN' | 'CASHIER';
 export type StaffStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 
 export interface RestaurantStaff {
