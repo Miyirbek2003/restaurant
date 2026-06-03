@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { Fragment, useState, useMemo } from 'react';
 import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -244,12 +244,24 @@ export function MenuPage() {
   };
 
   const rowActions = (onEdit: () => void, onDelete: () => void, extra?: React.ReactNode) => (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex flex-nowrap items-center justify-end gap-1">
       {extra}
-      <Button size="sm" variant="ghost" onClick={onEdit} title={t('common.edit')}>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="shrink-0 px-2"
+        onClick={onEdit}
+        title={t('common.edit')}
+      >
         <Pencil className="h-3.5 w-3.5" />
       </Button>
-      <Button size="sm" variant="ghost" onClick={onDelete} title={t('common.delete')}>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="shrink-0 px-2"
+        onClick={onDelete}
+        title={t('common.delete')}
+      >
         <Trash2 className="h-3.5 w-3.5 text-red-500" />
       </Button>
     </div>
@@ -297,36 +309,44 @@ export function MenuPage() {
             <EmptyState title={t('menu.noCategories')} description={t('menu.noCategoriesDesc')} />
           ) : (
             <div className="overflow-x-auto">
-              <table className="table-compact min-w-[560px]">
+              <table className="table-compact min-w-[560px] w-full table-fixed">
+                <colgroup>
+                  <col style={{ width: '5rem' }} />
+                  <col />
+                  <col />
+                  <col style={{ width: '7rem' }} />
+                  <col style={{ width: '11rem' }} />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th>{t('common.image')}</th>
-                    <th>{t('common.name')}</th>
-                    <th>{t('menu.description')}</th>
-                    <th>{t('common.status')}</th>
-                    <th>{t('common.actions')}</th>
+                    <th className="px-3 py-2">{t('common.image')}</th>
+                    <th className="px-4 py-2">{t('common.name')}</th>
+                    <th className="px-3 py-2">{t('menu.description')}</th>
+                    <th className="px-2 py-2">{t('common.status')}</th>
+                    <th className="px-2 py-2 text-right">{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {categories.map((cat) => (
                     <tr key={cat.id}>
-                      <td>
+                      <td className="px-3 py-2">
                         <MenuImage src={(cat as CategoryRow).image_url} alt={cat.name} size="xs" />
                       </td>
-                      <td className="py-3 pr-4 font-medium">{cat.name}</td>
-                      <td className="py-3 pr-4 text-slate-500">{cat.description ?? '—'}</td>
-                      <td>
+                      <td className="px-4 py-2 font-medium">{cat.name}</td>
+                      <td className="px-3 py-2 text-slate-500">{cat.description ?? '—'}</td>
+                      <td className="px-2 py-2">
                         <Badge color={cat.is_active ? 'green' : 'gray'} size="sm">
                           {cat.is_active ? t('common.active') : t('common.inactive')}
                         </Badge>
                       </td>
-                      <td>
+                      <td className="px-2 py-2">
                         {rowActions(
                           () => openEditCategory(cat as CategoryRow),
                           () => handleDeleteCategory(cat as CategoryRow),
                           <Button
                             size="sm"
                             variant="ghost"
+                            className="shrink-0 whitespace-nowrap px-2"
                             onClick={() => toggleCategory.mutate({ id: cat.id, is_active: !cat.is_active })}
                           >
                             {cat.is_active ? t('menu.deactivate') : t('menu.activate')}
@@ -354,69 +374,88 @@ export function MenuPage() {
         ) : products.length === 0 ? (
           <EmptyState title={t('menu.noProducts')} description={t('menu.noProductsDesc')} />
         ) : (
-          <div className="space-y-6">
-            {[...productsByCategory.entries()].map(([catName, items]) => (
-              <div key={catName}>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{catName}</p>
-                <div className="overflow-x-auto rounded-lg border border-slate-100 dark:border-slate-800">
-                  <table className="table-compact min-w-[640px]">
-                    <thead>
-                      <tr>
-                        <th>{t('common.image')}</th>
-                        <th>{t('common.name')}</th>
-                        <th>{t('menu.sku')}</th>
-                        <th>{t('menu.price')}</th>
-                        <th>{t('menu.stock')}</th>
-                        <th>{t('common.status')}</th>
-                        {canEdit && <th>{t('common.actions')}</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((p) => (
-                        <tr key={p.id}>
-                          <td>
-                            <MenuImage src={p.image_url} alt={p.name} size="xs" />
-                          </td>
-                          <td className="px-3 py-2 font-medium">
-                            {p.name}
+          <div className="overflow-x-auto rounded-lg border border-slate-100 dark:border-slate-800">
+            <table className="table-compact w-full min-w-[720px] table-fixed">
+              <colgroup>
+                <col style={{ width: '5rem' }} />
+                <col />
+                <col style={{ width: '6rem' }} />
+                <col style={{ width: '7rem' }} />
+                <col style={{ width: '5rem' }} />
+                <col style={{ width: '7rem' }} />
+                {canEdit && <col style={{ width: '11rem' }} />}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="px-3 py-2">{t('common.image')}</th>
+                  <th className="px-4 py-2">{t('common.name')}</th>
+                  <th className="px-2 py-2">{t('menu.sku')}</th>
+                  <th className="px-2 py-2 text-right">{t('menu.price')}</th>
+                  <th className="px-2 py-2 text-right">{t('menu.stock')}</th>
+                  <th className="px-2 py-2">{t('common.status')}</th>
+                  {canEdit && <th className="px-2 py-2 text-right">{t('common.actions')}</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {[...productsByCategory.entries()].map(([catName, items]) => (
+                  <Fragment key={catName}>
+                    <tr className="bg-slate-50/80 dark:bg-slate-800/40">
+                      <td
+                        colSpan={canEdit ? 7 : 6}
+                        className="py-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                      >
+                        {catName}
+                      </td>
+                    </tr>
+                    {items.map((p) => (
+                      <tr key={p.id}>
+                        <td className="px-3 py-2">
+                          <MenuImage src={p.image_url} alt={p.name} size="xs" />
+                        </td>
+                        <td className="px-4 py-2 font-medium">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="min-w-0">{p.name}</span>
                             {warehouseProductIds?.has(p.id) && (
-                              <Badge color="blue" size="sm" className="ml-2">
+                              <Badge color="blue" size="sm" className="shrink-0">
                                 {t('menu.warehouseBadge')}
                               </Badge>
                             )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-slate-500">{p.sku ?? '—'}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatCurrency(Number(p.price))}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">{p.stock_quantity}</td>
+                        <td className="px-2 py-2">
+                          <Badge color={p.is_active ? 'green' : 'gray'} size="sm">
+                            {p.is_active ? t('common.active') : t('common.inactive')}
+                          </Badge>
+                        </td>
+                        {canEdit && (
+                          <td className="px-2 py-2">
+                            {rowActions(
+                              () => openEditProduct(p as ProductRow),
+                              () => handleDeleteProduct(p as ProductRow),
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="shrink-0 whitespace-nowrap px-2"
+                                onClick={() =>
+                                  updateProduct.mutate({ id: p.id, is_active: !p.is_active })
+                                }
+                              >
+                                {p.is_active ? t('common.off') : t('common.on')}
+                              </Button>,
+                            )}
                           </td>
-                          <td className="px-3 py-2 text-slate-500">{p.sku ?? '—'}</td>
-                          <td>{formatCurrency(Number(p.price))}</td>
-                          <td>{p.stock_quantity}</td>
-                          <td>
-                            <Badge color={p.is_active ? 'green' : 'gray'} size="sm">
-                              {p.is_active ? t('common.active') : t('common.inactive')}
-                            </Badge>
-                          </td>
-                          {canEdit && (
-                            <td>
-                              {rowActions(
-                                () => openEditProduct(p as ProductRow),
-                                () => handleDeleteProduct(p as ProductRow),
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    updateProduct.mutate({ id: p.id, is_active: !p.is_active })
-                                  }
-                                >
-                                  {p.is_active ? t('common.off') : t('common.on')}
-                                </Button>,
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
+                        )}
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
         {isError && (

@@ -79,7 +79,7 @@ export function DashboardPage() {
           title={t('dashboard.openOrders')}
           value={String(data.openOrders)}
           icon={ShoppingBag}
-          subtitle={t('dashboard.ordersToday', { n: data.ordersToday })}
+          subtitle={t('dashboard.ordersPaidToday', { n: data.ordersToday })}
         />
         <StatCard
           title={t('dashboard.tablesOccupied')}

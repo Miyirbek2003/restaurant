@@ -24,6 +24,7 @@ export const MANAGER_PATH_PREFIXES = [
   '/employees',
   '/qr-menu',
   '/kassa',
+  '/product-profit',
 ] as const;
 
 export const CASHIER_PATH_PREFIXES = ['/kassa', '/orders', '/tables'] as const;

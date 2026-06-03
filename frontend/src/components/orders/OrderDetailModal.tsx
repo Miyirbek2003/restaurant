@@ -13,10 +13,11 @@ import { PayOrderModal } from '@/components/orders/PayOrderModal';
 import { useProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
-import { getWaiterName } from '@/lib/orderUtils';
+import { getTableName, getWaiterName } from '@/lib/orderUtils';
 import { buildOrderBill, SERVICE_FEE_RATE } from '@/lib/orderBilling';
 import { canEditOrderItems, canPayOrder, isCountableProduct, isLineInKitchen, minLineQuantity } from '@/lib/orderEdit';
 import {
+  expandDraftForDisplay,
   isDraftDirty,
   isUnsavedOrderLine,
   serverLinesToDraft,
@@ -111,24 +112,24 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
 
   const dirty = useMemo(() => isDraftDirty(baseline, draft), [baseline, draft]);
 
-  const displayItems = draft;
+  const displayUnits = useMemo(() => expandDraftForDisplay(draft), [draft]);
   const bill = useMemo(() => {
     if (!order) return null;
-    const rows = displayItems.map((d) => ({
+    const rows = draft.map((d) => ({
       id: d.key,
       quantity: d.quantity,
       unit_price: d.unit_price,
       product_name: d.product_name,
     }));
     const mealSubtotal = rows.reduce((s, r) => s + r.unit_price * r.quantity, 0);
-    const taxAmount = displayItems.reduce(
+    const taxAmount = draft.reduce(
       (s, d) => s + d.unit_price * d.quantity * (d.tax_rate / 100),
       0,
     );
     return buildOrderBill(rows, mealSubtotal, taxAmount);
-  }, [order, displayItems]);
+  }, [order, draft]);
   const servicePct = Math.round(SERVICE_FEE_RATE * 100);
-  const tableName = (order?.tables as { name: string } | null)?.name ?? t('common.takeaway');
+  const tableName = order ? getTableName(order, t('common.takeaway')) : t('common.takeaway');
 
   const qtyInDraft = useMemo(() => {
     const map: Record<string, number> = {};
@@ -198,26 +199,20 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
       return;
     }
 
-    setDraft((prev) => {
-      const mergeTarget = isManagerUser
-        ? prev.find((l) => l.product_id === p.id)
-        : prev.find((l) => l.product_id === p.id && isUnsavedOrderLine(l));
-      if (mergeTarget) {
-        return prev.map((l) => (l.key === mergeTarget.key ? { ...l, quantity: l.quantity + 1 } : l));
-      }
-      return [
-        ...prev,
-        {
-          key: `new-${p.id}-${Date.now()}`,
-          product_id: p.id,
-          product_name: p.name,
-          quantity: 1,
-          kitchen_qty: 0,
-          unit_price: Number(p.price),
-          tax_rate: Number(p.tax_rate ?? 10),
-        },
-      ];
-    });
+    const now = Date.now();
+    setDraft((prev) => [
+      ...prev,
+      {
+        key: `new-${p.id}-${now}`,
+        product_id: p.id,
+        product_name: p.name,
+        quantity: 1,
+        kitchen_qty: 0,
+        unit_price: Number(p.price),
+        tax_rate: Number(p.tax_rate ?? 10),
+        created_at: new Date(now).toISOString(),
+      },
+    ]);
   };
 
   const handleSave = async () => {
@@ -299,7 +294,7 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
       onClose={handleClose}
       title={
         order
-          ? t('orderDetail.title', { n: order.order_number })
+          ? t('orderDetail.titleWithTable', { n: order.order_number, table: tableName })
           : t('orderDetail.titleFallback')
       }
       className={canEdit ? 'max-w-2xl' : 'max-w-md'}
@@ -312,7 +307,6 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
             <Badge color={statusColor[order.status as OrderStatus] ?? 'gray'} size="sm">
               {orderStatus(order.status as OrderStatus)}
             </Badge>
-            <span className="text-sm text-slate-500">{tableName}</span>
             {dirty && (
               <Badge color="yellow" size="sm">
                 {t('orderDetail.unsaved')}
@@ -327,6 +321,8 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
           )}
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <dt className="text-slate-500">{t('orderDetail.table')}</dt>
+            <dd className="font-medium">{tableName}</dd>
             <dt className="text-slate-500">{t('orderDetail.waiter')}</dt>
             <dd className="font-medium">{getWaiterName(order)}</dd>
             <dt className="text-slate-500">{t('orderDetail.created')}</dt>
@@ -354,29 +350,29 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
 
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{t('orderDetail.items')}</h3>
-            {displayItems.length === 0 ? (
+            {displayUnits.length === 0 ? (
               <p className="text-sm text-slate-500">{t('orderDetail.noItems')}</p>
             ) : (
-              displayItems.map((item) => {
+              displayUnits.map(({ line: item, unitIndex, isLastUnit }) => {
                 const isNewLine = isUnsavedOrderLine(item);
                 const floor = minLineQuantity(item.kitchen_qty, isManagerUser);
                 const canDecrease = isManagerUser && item.quantity > floor;
                 const canIncrease = isManagerUser;
                 const canRemove = isManagerUser || isNewLine;
-                const showControls = canEdit && (isManagerUser || isNewLine);
+                const showControls = canEdit && isLastUnit && (isManagerUser || isNewLine);
                 return (
-                <div key={item.key} className="flex items-center justify-between gap-2">
+                <div key={`${item.key}-${unitIndex}`} className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <DottedRow
-                      label={`${item.quantity}× ${item.product_name || t('common.item')}`}
-                      value={formatCurrency(item.unit_price * item.quantity)}
+                      label={item.product_name || t('common.item')}
+                      value={formatCurrency(item.unit_price)}
                     />
-                    {isNewLine && !isManagerUser && (
+                    {isNewLine && !isManagerUser && isLastUnit && (
                       <p className="mt-0.5 text-xs text-primary-600 dark:text-primary-400">
                         {t('orderDetail.newItemPending')}
                       </p>
                     )}
-                    {isManagerUser && isLineInKitchen(item.kitchen_qty) && (
+                    {isManagerUser && isLineInKitchen(item.kitchen_qty) && isLastUnit && (
                       <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
                         {t('orderDetail.inKitchenQty', { n: item.kitchen_qty })}
                       </p>
@@ -487,28 +483,23 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
               {t('common.cancel')}
             </Button>
             {mayPayRole && status && canPayOrder(status) && (
-              <>
-                <Button type="button" variant="secondary" onClick={handlePrintCheck}>
-                  {t('orders.printCheck')}
-                </Button>
-                <Button
-                  type="button"
-                  disabled={Boolean(openKassa && !isKassaOwner)}
-                  onClick={() => {
-                    if (!openKassa) {
-                      notify({ type: 'warning', title: t('kassa.mustOpenFirst') });
-                      return;
-                    }
-                    if (!isKassaOwner) {
-                      notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
-                      return;
-                    }
-                    setPayOpen(true);
-                  }}
-                >
-                  {t('orders.pay')}
-                </Button>
-              </>
+              <Button
+                type="button"
+                disabled={Boolean(openKassa && !isKassaOwner)}
+                onClick={() => {
+                  if (!openKassa) {
+                    notify({ type: 'warning', title: t('kassa.mustOpenFirst') });
+                    return;
+                  }
+                  if (!isKassaOwner) {
+                    notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
+                    return;
+                  }
+                  setPayOpen(true);
+                }}
+              >
+                {t('orders.pay')}
+              </Button>
             )}
             {canEdit && (
               <Button type="button" loading={saveItems.isPending} disabled={!dirty} onClick={() => void handleSave()}>

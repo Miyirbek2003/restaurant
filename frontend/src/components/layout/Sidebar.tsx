@@ -16,6 +16,7 @@ import {
   QrCode,
   Building2,
   BarChart3,
+  TrendingUp,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -68,6 +69,7 @@ const navGroups: NavGroup[] = [
       { to: '/expenses', labelKey: 'nav.expenses', icon: Receipt, roles: ['MANAGER', 'CASHIER'] },
       { to: '/incomes', labelKey: 'nav.incomes', icon: Banknote, roles: ['MANAGER', 'CASHIER'] },
       { to: '/kassa', labelKey: 'nav.kassa', icon: Wallet, roles: ['MANAGER', 'CASHIER'] },
+      { to: '/product-profit', labelKey: 'nav.productProfit', icon: TrendingUp, roles: ['MANAGER'] },
     ],
   },
   {

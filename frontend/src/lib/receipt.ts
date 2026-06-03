@@ -4,6 +4,7 @@ import { printOrderReceipt, type OrderReceiptData } from '@/lib/printOrderReceip
 import type { PaymentLine } from '@/lib/payments';
 import { getWaiterName } from '@/lib/orderUtils';
 import { orderItemName, type OrderItemNameSource } from '@/lib/orderItem';
+import { sortOrderItemsByCreated } from '@/lib/orderItemSave';
 
 type RestaurantInfo = {
   name: string;
@@ -21,6 +22,7 @@ type OrderForReceipt = {
       id: string;
       quantity: number;
       unit_price: number;
+      created_at?: string | null;
       products?: { name: string } | null;
     }
   >;
@@ -38,14 +40,13 @@ export function printReceiptForOrder(
   paidAt = new Date(),
   billOverride?: OrderBill,
 ): void {
-  const items = order.order_items ?? [];
+  const items = sortOrderItemsByCreated(order.order_items ?? []);
   const bill: OrderBill = billOverride ?? buildOrderBill(items, Number(order.subtotal), 0);
 
   const data: OrderReceiptData = {
     restaurantName: restaurant.name,
     address: restaurant.address,
     phone: restaurant.phone,
-    email: restaurant.email,
     orderNumber: order.order_number,
     tableName,
     waiterName: getWaiterName(order),

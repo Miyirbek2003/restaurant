@@ -5,15 +5,21 @@ export function matchesSearch(query: string, ...fields: (string | null | undefin
   return fields.some((f) => (f ?? '').toLowerCase().includes(q));
 }
 
-/** Inclusive date range on YYYY-MM-DD strings (or ISO datetimes). */
+/** Local calendar day (YYYY-MM-DD) from an ISO timestamp. */
+export function toLocalDayKey(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return dateToIsoDay(new Date(value));
+}
+
+/** Inclusive date range on local calendar days (from/to are YYYY-MM-DD). */
 export function matchesDateRange(
   value: string | null | undefined,
   from?: string,
   to?: string,
 ): boolean {
   if (!from && !to) return true;
-  if (!value) return false;
-  const day = value.slice(0, 10);
+  const day = toLocalDayKey(value);
+  if (!day) return false;
   if (from && day < from) return false;
   if (to && day > to) return false;
   return true;

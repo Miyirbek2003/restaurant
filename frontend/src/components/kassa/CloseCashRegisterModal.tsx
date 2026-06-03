@@ -8,6 +8,8 @@ import {
   useSessionPaymentTotals,
   type CashRegisterSession,
 } from '@/hooks/useCashRegister';
+import { KassaFactBreakdown } from '@/components/kassa/KassaFactBreakdown';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { formatCurrency } from '@/lib/utils';
 import { getErrorMessage } from '@/lib/errors';
 import { t } from '@/i18n';
@@ -30,6 +32,7 @@ export function CloseCashRegisterModal({
   const { data: expected, isLoading } = useSessionPaymentTotals(session.id, session.opened_at);
   const { data: openOrdersCount = 0 } = useOpenOrdersCount();
   const closeRegister = useCloseCashRegister();
+  const notify = useNotificationStore((s) => s.add);
 
   const [countedCash, setCountedCash] = useState('');
   const [countedCard, setCountedCard] = useState('');
@@ -37,15 +40,25 @@ export function CloseCashRegisterModal({
   const [closingNotes, setClosingNotes] = useState('');
 
   useEffect(() => {
+    if (!open) return;
+    setCountedCash('');
+    setClosingNotes('');
+  }, [open]);
+
+  useEffect(() => {
     if (!open || !expected) return;
-    setCountedCash(String(expected.cash));
     setCountedCard(String(expected.card + expected.mobile));
     setCountedClick(String(expected.click));
-    setClosingNotes('');
   }, [open, expected]);
+
+  const cashEntered = countedCash.trim() !== '';
 
   const handleClose = () => {
     if (!expected) return;
+    if (!cashEntered) {
+      notify({ type: 'warning', title: t('kassa.cashCountRequired') });
+      return;
+    }
     closeRegister.mutate(
       {
         sessionId: session.id,
@@ -65,12 +78,12 @@ export function CloseCashRegisterModal({
     );
   };
 
-  const factCash = parseFloat(countedCash) || 0;
+  const factCash = cashEntered ? parseFloat(countedCash) || 0 : 0;
   const factCard = parseFloat(countedCard) || 0;
   const factClick = parseFloat(countedClick) || 0;
   const expectedTotal = expected?.total ?? 0;
-  const factTotal = factCash + factCard + factClick;
-  const diff = factTotal - expectedTotal;
+  const factTotal = cashEntered ? factCash + factCard + factClick : 0;
+  const diff = cashEntered ? factTotal - expectedTotal : 0;
   const shortage = diff < 0 ? Math.abs(diff) : 0;
   const excess = diff > 0 ? diff : 0;
 
@@ -109,32 +122,36 @@ export function CloseCashRegisterModal({
             </dl>
 
             <p className="text-sm font-medium">{t('kassa.countedInDrawer')}</p>
-            <Input
-              label={t('cashRegister.cash')}
-              type="number"
-              min="0"
-              step="0.01"
-              value={countedCash}
-              onChange={(e) => setCountedCash(e.target.value)}
-            />
-            <Input
-              label={t('cashRegister.card')}
-              type="number"
-              min="0"
-              step="0.01"
-              value={countedCard}
-              onChange={(e) => setCountedCard(e.target.value)}
-              disabled
-            />
-            <Input
-              label={t('cashRegister.click')}
-              type="number"
-              min="0"
-              step="0.01"
-              value={countedClick}
-              onChange={(e) => setCountedClick(e.target.value)}
-              disabled
-            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Input
+                label={t('cashRegister.cash')}
+                type="number"
+                min="0"
+                step="0.01"
+                value={countedCash}
+                onChange={(e) => setCountedCash(e.target.value)}
+                required
+                placeholder={t('kassa.cashCountPlaceholder')}
+              />
+              <Input
+                label={t('cashRegister.card')}
+                type="number"
+                min="0"
+                step="0.01"
+                value={countedCard}
+                onChange={(e) => setCountedCard(e.target.value)}
+                disabled
+              />
+              <Input
+                label={t('cashRegister.click')}
+                type="number"
+                min="0"
+                step="0.01"
+                value={countedClick}
+                onChange={(e) => setCountedClick(e.target.value)}
+                disabled
+              />
+            </div>
             <Input
               label={t('kassa.closingNotes')}
               value={closingNotes}
@@ -143,19 +160,21 @@ export function CloseCashRegisterModal({
             />
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800/50">
-              <p className="font-medium">{t('kassa.factSectionTitle')}</p>
-              <p className="text-slate-500">{t('kassa.countedShort', { cash: formatCurrency(factCash), card: formatCurrency(factCard), click: formatCurrency(factClick) })}</p>
-              <div className="mt-1 flex justify-between font-semibold">
-                <span>{t('kassa.factTotal')}</span>
-                <span className="tabular-nums">{formatCurrency(factTotal)}</span>
-              </div>
-              {shortage > 0 && (
+              <p className="mb-2 font-medium">{t('kassa.factSectionTitle')}</p>
+              <KassaFactBreakdown cash={factCash} card={factCard} click={factClick} cashUnset={!cashEntered} />
+              {cashEntered && (
+                <div className="mt-2 flex justify-between font-semibold">
+                  <span>{t('kassa.factTotal')}</span>
+                  <span className="tabular-nums">{formatCurrency(factTotal)}</span>
+                </div>
+              )}
+              {cashEntered && shortage > 0 && (
                 <div className="mt-1 flex justify-between text-red-600 dark:text-red-400">
                   <span>{t('kassa.shortage')}</span>
                   <span className="tabular-nums">{formatCurrency(shortage)}</span>
                 </div>
               )}
-              {excess > 0 && (
+              {cashEntered && excess > 0 && (
                 <div className="mt-1 flex justify-between text-emerald-600 dark:text-emerald-400">
                   <span>{t('kassa.excess')}</span>
                   <span className="tabular-nums">{formatCurrency(excess)}</span>
@@ -169,7 +188,11 @@ export function CloseCashRegisterModal({
           <Button type="button" variant="ghost" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button loading={closeRegister.isPending} disabled={!expected || closeRegister.isPending} onClick={handleClose}>
+          <Button
+            loading={closeRegister.isPending}
+            disabled={!expected || !cashEntered || closeRegister.isPending}
+            onClick={handleClose}
+          >
             {t('kassa.closeConfirm')}
           </Button>
         </div>

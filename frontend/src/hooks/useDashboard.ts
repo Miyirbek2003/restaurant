@@ -71,7 +71,8 @@ export function useDashboard() {
           .from('orders')
           .select('id', { count: 'exact', head: true })
           .eq('restaurant_id', restaurantId!)
-          .gte('created_at', today),
+          .eq('status', 'PAID')
+          .gte('paid_at', today),
         supabase
           .from('order_items')
           .select('quantity, product_name, products(name)')

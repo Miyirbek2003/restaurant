@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -7,8 +7,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useResourceInsert, useResourceUpdate, useResourceDelete } from '@/hooks/useResource';
-import { useExpensesList } from '@/hooks/useExpenses';
+import { useResourceInsert } from '@/hooks/useResource';
+import { useExpensesList, type ExpenseRow } from '@/hooks/useExpenses';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
 import { useMyStaffId } from '@/hooks/useMyStaff';
@@ -28,6 +28,18 @@ const CATEGORIES = CATEGORY_VALUES.map((value) => ({
 }));
 
 const CATEGORY_FILTER_OPTIONS = [{ value: '', label: t('filters.allCategories') }, ...CATEGORIES];
+
+function expenseTitle(title: string | null | undefined, category: string): string {
+  const trimmed = title?.trim() ?? '';
+  return trimmed || expenseCategory(category);
+}
+
+function expenseListHeading(row: ExpenseRow): string {
+  const base = expenseTitle(row.title, row.category);
+  if (row.category !== 'SALARIES') return base;
+  const receiver = row.staff?.name ?? t('salaries.unassigned');
+  return `${base} · ${receiver}`;
+}
 
 type ExpenseForm = {
   title: string;
@@ -55,13 +67,10 @@ export function ExpensesPage() {
   const { data: openKassa } = useOpenCashRegisterSession();
   const { data: myStaffId } = useMyStaffId();
   const insert = useResourceInsert('expenses');
-  const update = useResourceUpdate('expenses');
-  const remove = useResourceDelete('expenses');
   const notify = useNotificationStore((s) => s.add);
 
   const [open, setOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(pageSize);
-  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<ExpenseForm>(emptyForm());
   const [filters, setFilters] = useState<ListFiltersValue>(() => {
     const range = defaultDateRangeMonth();
@@ -107,39 +116,23 @@ export function ExpensesPage() {
   const applyRange = (range: { from: string; to: string }) =>
     setFilters((prev) => ({ ...prev, dateFrom: range.from, dateTo: range.to }));
 
+  const resetFilters = () => {
+    const range = defaultDateRangeMonth();
+    setFilters({ search: '', dateFrom: range.from, dateTo: range.to, category: '' });
+  };
+
   const openAdd = () => {
     if (cashierCreateBlocked) {
       notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
       return;
     }
-    setEditId(null);
     setForm(emptyForm());
     setOpen(true);
-  };
-
-  const openEdit = (row: (typeof data)[0]) => {
-    setEditId(row.id);
-    setForm({
-      title: row.title,
-      category: row.category,
-      amount: String(row.amount),
-      date: row.date,
-      notes: row.notes ?? '',
-      staff_id: row.staff_id ?? '',
-    });
-    setOpen(true);
+    notify({ type: 'info', title: t('expenses.readOnlyNotice') });
   };
 
   const onStaffChange = (staffId: string) => {
-    const emp = employees.find((e) => e.id === staffId);
-    setForm((f) => ({
-      ...f,
-      staff_id: staffId,
-      title:
-        emp && f.category === 'SALARIES'
-          ? t('expenses.salaryTitle', { name: emp.name })
-          : f.title,
-    }));
+    setForm((f) => ({ ...f, staff_id: staffId }));
   };
 
   const onCategoryChange = (category: string) => {
@@ -152,7 +145,7 @@ export function ExpensesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editId && cashierCreateBlocked) {
+    if (cashierCreateBlocked) {
       notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
       return;
     }
@@ -161,7 +154,7 @@ export function ExpensesPage() {
       return;
     }
     const body: Record<string, unknown> = {
-      title: form.title,
+      title: expenseTitle(form.title, form.category),
       category: form.category,
       amount: parseFloat(form.amount),
       date: form.date,
@@ -169,13 +162,8 @@ export function ExpensesPage() {
       staff_id: isSalary ? form.staff_id : null,
     };
     try {
-      if (editId) {
-        await update.mutateAsync({ id: editId, ...body });
-        notify({ type: 'success', title: t('expenses.updated') });
-      } else {
-        await insert.mutateAsync(body);
-        notify({ type: 'success', title: t('expenses.added') });
-      }
+      await insert.mutateAsync(body);
+      notify({ type: 'success', title: t('expenses.added') });
       setOpen(false);
     } catch (err) {
       notify({ type: 'error', title: t('common.error'), message: getErrorMessage(err) });
@@ -195,6 +183,7 @@ export function ExpensesPage() {
       <ListFilters
         value={filters}
         onChange={setFilters}
+        onReset={resetFilters}
         searchPlaceholder={t('expenses.searchPlaceholder')}
         categoryOptions={CATEGORY_FILTER_OPTIONS}
         categoryLabel={t('expenses.category')}
@@ -226,34 +215,27 @@ export function ExpensesPage() {
       ) : (
         <div className="space-y-3">
           {paged.map((row) => (
-            <Card key={row.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold">{row.title}</p>
-                <p className="text-sm text-slate-500">
-                  {expenseCategory(row.category)}
-                  {row.staff?.name ? ` · ${row.staff.name}` : ''} · {row.date}
-                </p>
-                <p className="text-lg font-bold text-red-600">{formatCurrency(Number(row.amount))}</p>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="ghost" onClick={() => openEdit(row)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    if (window.confirm(t('expenses.deleteConfirm', { title: row.title }))) {
-                      remove.mutate(row.id);
-                    }
-                  }}
-                >
-                  <Trash2 className="h-4 w-4 text-red-500" />
-                </Button>
-              </div>
+            <Card
+              key={row.id}
+              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3"
+            >
+              <p className="min-w-0 flex-1 font-semibold">{expenseListHeading(row)}</p>
+              <p className="shrink-0 text-sm text-slate-500">
+                {row.category === 'SALARIES'
+                  ? row.date
+                  : `${expenseCategory(row.category)} · ${row.date}`}
+              </p>
+              <p className="shrink-0 text-lg font-bold tabular-nums text-red-600">
+                {formatCurrency(Number(row.amount))}
+              </p>
             </Card>
           ))}
-          <div className="flex justify-center pt-2">
+          <div className="flex justify-end gap-2 pt-2">
+            {visibleCount > pageSize && (
+              <Button size="sm" variant="ghost" onClick={() => setVisibleCount(pageSize)}>
+                {t('common.cancel')}
+              </Button>
+            )}
             <Button
               size="sm"
               variant="secondary"
@@ -266,7 +248,7 @@ export function ExpensesPage() {
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editId ? t('expenses.edit') : t('expenses.new')}>
+      <Modal open={open} onClose={() => setOpen(false)} title={t('expenses.new')}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Select
             label={t('expenses.category')}
@@ -284,10 +266,10 @@ export function ExpensesPage() {
             />
           )}
           <Input
-            label={t('expenses.titleField')}
+            label={t('expenses.titleFieldOptional')}
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
-            required
+            placeholder={expenseCategory(form.category)}
           />
           <Input
             label={t('expenses.amount')}
@@ -309,7 +291,7 @@ export function ExpensesPage() {
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" loading={insert.isPending || update.isPending}>
+            <Button type="submit" loading={insert.isPending}>
               {t('common.save')}
             </Button>
           </div>

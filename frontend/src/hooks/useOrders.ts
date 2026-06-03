@@ -72,7 +72,7 @@ export function useOrders(status?: OrderStatus) {
         .select(orderSelect)
         .eq('restaurant_id', restaurantId!)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(200);
 
       if (status) q = q.eq('status', status);
 
@@ -359,6 +359,7 @@ export function useUpdateOrderStatus() {
 
 export function useSendToKitchen() {
   const qc = useQueryClient();
+  const restaurantId = useRestaurantId();
 
   return useMutation({
     mutationFn: async (orderId: string) => {
@@ -374,12 +375,36 @@ export function useSendToKitchen() {
 
       return orderId;
     },
+    onMutate: async (orderId) => {
+      const ordersKey = ['orders', restaurantId, undefined] as const;
+      await qc.cancelQueries({ queryKey: ['orders', restaurantId] });
+      const snapshot = qc.getQueryData(ordersKey);
+      const now = new Date().toISOString();
+
+      qc.setQueryData(ordersKey, (old: { id: string; status: OrderStatus; sent_to_kitchen_at?: string | null; stock_deducted?: boolean }[] | undefined) =>
+        old?.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                status: 'NEW',
+                sent_to_kitchen_at: o.sent_to_kitchen_at ?? now,
+                stock_deducted: true,
+              }
+            : o,
+        ),
+      );
+
+      return { snapshot, ordersKey };
+    },
+    onError: (_err, _orderId, context) => {
+      if (context?.snapshot !== undefined) {
+        qc.setQueryData(context.ordersKey, context.snapshot);
+      }
+    },
     onSuccess: (orderId) => {
-      void qc.invalidateQueries({ queryKey: ['orders'] });
-      void qc.invalidateQueries({ queryKey: ['kitchen-queue'] });
+      void qc.invalidateQueries({ queryKey: ['orders', restaurantId] });
+      void qc.invalidateQueries({ queryKey: ['kitchen-queue', restaurantId] });
       void qc.invalidateQueries({ queryKey: ['order', orderId] });
-      void qc.invalidateQueries({ queryKey: ['products'] });
-      void qc.invalidateQueries({ queryKey: ['inventory_items'] });
     },
   });
 }

@@ -410,6 +410,7 @@ export function InventoryPage() {
       <ListFilters
         value={itemFilters}
         onChange={setItemFilters}
+        onReset={() => setItemFilters({ search: '', dateFrom: '', dateTo: '', category: '' })}
         showDates={false}
         searchPlaceholder={t('warehouse.searchItems')}
         categoryOptions={warehouseCategoryOptions}
@@ -461,6 +462,10 @@ export function InventoryPage() {
         <ListFilters
           value={historyFilters}
           onChange={setHistoryFilters}
+          onReset={() => {
+            const range = defaultDateRangeMonth();
+            setHistoryFilters({ search: '', dateFrom: range.from, dateTo: range.to });
+          }}
           searchPlaceholder={t('warehouse.searchHistory')}
           className="mb-4 border-0 bg-slate-50 p-0 dark:bg-slate-900/50"
         />

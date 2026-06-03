@@ -14,14 +14,14 @@ import { printCheckForOrder, printReceiptForOrder, restaurantFromProfile } from 
 import type { PaymentLine } from '@/lib/payments';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
-import { getWaiterName } from '@/lib/orderUtils';
+import { getWaiterName, orderDateForFilter } from '@/lib/orderUtils';
 import { canEditOrderItems, canPayOrder } from '@/lib/orderEdit';
 import { canCreateOrders, canPlaceOrders, canOperateCashRegister } from '@/lib/roles';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { reportStockShortage, type StockFailure } from '@/lib/stock';
 import { t, orderStatus } from '@/i18n';
-import { defaultDateRangeMonth, matchesDateRange, matchesSearch } from '@/lib/filters';
+import { matchesDateRange, matchesSearch, todayRange, yesterdayRange } from '@/lib/filters';
 import { ListFilters, type ListFiltersValue } from '@/components/ui/ListFilters';
 import type { OrderStatus } from '@/types';
 
@@ -59,6 +59,7 @@ type OrderRow = {
   total: number;
   table_id: string | null;
   created_at: string;
+  paid_at: string | null;
   tables: { name: string } | null;
   staff?: { name: string; role?: string } | null;
   order_items?: {
@@ -102,9 +103,17 @@ export function OrdersPage() {
 
   const [view, setView] = useState<ViewFilter>('active');
   const [filters, setFilters] = useState<ListFiltersValue>(() => {
-    const range = defaultDateRangeMonth();
+    const range = todayRange();
     return { search: '', dateFrom: range.from, dateTo: range.to };
   });
+
+  const applyDateRange = (range: { from: string; to: string }) =>
+    setFilters((prev) => ({ ...prev, dateFrom: range.from, dateTo: range.to }));
+
+  const resetFilters = () => {
+    const range = todayRange();
+    setFilters({ search: '', dateFrom: range.from, dateTo: range.to });
+  };
   const [payOrder, setPayOrder] = useState<OrderRow | null>(null);
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
   const canUpdateItems = canPlaceOrders(profile?.role);
@@ -134,7 +143,7 @@ export function OrdersPage() {
   const periodOrders = useMemo(
     () =>
       orderList
-        .filter((o) => matchesDateRange(o.created_at, filters.dateFrom, filters.dateTo))
+        .filter((o) => matchesDateRange(orderDateForFilter(o), filters.dateFrom, filters.dateTo))
         .filter((o) =>
           matchesSearch(filters.search, String(o.order_number), o.tables?.name, getWaiterName(o)),
         ),
@@ -188,14 +197,6 @@ export function OrdersPage() {
     });
   };
 
-  const printCheck = (order: OrderRow) => {
-    printCheckForOrder(
-      order,
-      order.tables?.name ?? t('common.takeaway'),
-      restaurantFromProfile(profile?.restaurants),
-    );
-  };
-
   const confirmPay = (grandTotal: number, payments: PaymentLine[]) => {
     if (!payOrder || !openKassa) return;
     const tableName = payOrder.tables?.name ?? t('common.takeaway');
@@ -238,7 +239,18 @@ export function OrdersPage() {
       <ListFilters
         value={filters}
         onChange={setFilters}
+        onReset={resetFilters}
         searchPlaceholder={t('orders.searchPlaceholder')}
+        beforeDates={
+          <div className="flex w-full shrink-0 flex-wrap items-end gap-2 sm:w-auto">
+            <Button size="sm" variant="secondary" onClick={() => applyDateRange(todayRange())}>
+              {t('filters.today')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => applyDateRange(yesterdayRange())}>
+              {t('filters.yesterday')}
+            </Button>
+          </div>
+        }
       />
 
       <div className="flex flex-wrap gap-2">
@@ -324,7 +336,7 @@ export function OrdersPage() {
                   {order.status === 'DRAFT' && (
                     <Button
                       size="sm"
-                      loading={sendKitchen.isPending}
+                      loading={sendKitchen.isPending && sendKitchen.variables === order.id}
                       onClick={() => sendToKitchen(order.id)}
                     >
                       {t('orders.sendToKitchen')}
@@ -333,21 +345,16 @@ export function OrdersPage() {
                   {action && (
                     <Button
                       size="sm"
-                      loading={updateStatus.isPending}
+                      loading={updateStatus.isPending && updateStatus.variables?.id === order.id}
                       onClick={() => updateStatus.mutate({ id: order.id, status: action.next })}
                     >
                       {action.label}
                     </Button>
                   )}
                   {canPay && canPayOrder(order.status) && (
-                    <>
-                      <Button size="sm" variant="secondary" onClick={() => printCheck(order)}>
-                        {t('orders.printCheck')}
-                      </Button>
-                      <Button size="sm" disabled={Boolean(openKassa && !isKassaOwner)} onClick={() => startPay(order)}>
-                        {t('orders.pay')}
-                      </Button>
-                    </>
+                    <Button size="sm" disabled={Boolean(openKassa && !isKassaOwner)} onClick={() => startPay(order)}>
+                      {t('orders.pay')}
+                    </Button>
                   )}
                 </div>
               </div>

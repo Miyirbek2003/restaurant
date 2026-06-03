@@ -1,8 +1,7 @@
 import { format } from 'date-fns';
-import type { OrderBill } from '@/lib/orderBilling';
+import type { BillLine, OrderBill } from '@/lib/orderBilling';
 import { SERVICE_FEE_RATE } from '@/lib/orderBilling';
-import type { PaymentLine, PaymentMethod } from '@/lib/payments';
-import { PAYMENT_METHOD_LABEL_KEYS } from '@/lib/payments';
+import type { PaymentLine } from '@/lib/payments';
 import { formatCurrency } from '@/lib/utils';
 import { t } from '@/i18n';
 
@@ -10,7 +9,6 @@ export type OrderReceiptData = {
   restaurantName: string;
   address?: string | null;
   phone?: string | null;
-  email?: string | null;
   orderNumber: number;
   tableName: string;
   waiterName: string;
@@ -27,8 +25,17 @@ function escapeHtml(value: string): string {
     .replaceAll('"', '&quot;');
 }
 
-function paymentLabel(method: PaymentMethod): string {
-  return t(PAYMENT_METHOD_LABEL_KEYS[method]);
+/** One printed row per unit — no combined "2×" lines on the receipt. */
+function expandReceiptItemRows(lines: BillLine[]): { name: string; price: number }[] {
+  const rows: { name: string; price: number }[] = [];
+  for (const line of lines) {
+    const unitPrice = line.unitPrice;
+    const count = Math.max(1, Math.floor(line.quantity));
+    for (let i = 0; i < count; i++) {
+      rows.push({ name: line.name, price: unitPrice });
+    }
+  }
+  return rows;
 }
 
 function receiptStyles(): string {
@@ -138,20 +145,12 @@ export function buildOrderReceiptHtml(data: OrderReceiptData): string {
   const contactLines = [
     data.address?.trim(),
     data.phone?.trim() ? `${t('receipt.phone')}: ${data.phone.trim()}` : null,
-    data.email?.trim(),
   ].filter(Boolean);
 
-  const itemsHtml = data.bill.lines
-    .map((line) => {
-      const qtyPrefix = line.quantity > 1 ? `${line.quantity}× ` : '';
-      return `<div class="item"><span class="name">${escapeHtml(qtyPrefix + line.name)}</span><span class="price">${escapeHtml(formatCurrency(line.lineTotal))}</span></div>`;
-    })
-    .join('');
-
-  const paymentsHtml = data.payments
+  const itemsHtml = expandReceiptItemRows(data.bill.lines)
     .map(
-      (p) =>
-        `<div class="row"><span>${escapeHtml(paymentLabel(p.method))}</span><span>${escapeHtml(formatCurrency(p.amount))}</span></div>`,
+      (row) =>
+        `<div class="item"><span class="name">${escapeHtml(row.name)}</span><span class="price">${escapeHtml(formatCurrency(row.price))}</span></div>`,
     )
     .join('');
 
@@ -191,12 +190,6 @@ export function buildOrderReceiptHtml(data: OrderReceiptData): string {
     <div class="row"><span>${escapeHtml(t('receipt.serviceFee', { n: servicePct }))}</span><span>${escapeHtml(formatCurrency(data.bill.serviceFee))}</span></div>
     <div class="row total-row"><span>${escapeHtml(t('receipt.total'))}</span><span>${escapeHtml(formatCurrency(data.bill.grandTotal))}</span></div>
 
-    ${
-      paymentsHtml
-        ? `<hr class="rule" /><div class="payments">${paymentsHtml}<div class="row"><span>${escapeHtml(t('receipt.status'))}</span><span>${escapeHtml(t('receipt.approved'))}</span></div></div>`
-        : ''
-    }
-
     <div class="center footer">
       <div>${escapeHtml(t('receipt.footerLine1'))}</div>
       <div>${escapeHtml(t('receipt.footerLine2'))}</div>
@@ -211,24 +204,52 @@ export function buildOrderReceiptHtml(data: OrderReceiptData): string {
 
 export function printOrderReceipt(data: OrderReceiptData): void {
   const html = buildOrderReceiptHtml(data);
-  const win = window.open('', '_blank', 'noopener,noreferrer,width=420,height=720');
-  if (!win) return;
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('title', t('receipt.title', { n: data.orderNumber }));
+  Object.assign(iframe.style, {
+    position: 'fixed',
+    width: '0',
+    height: '0',
+    border: 'none',
+    opacity: '0',
+    pointerEvents: 'none',
+  });
 
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
+  document.body.appendChild(iframe);
 
-  win.onload = () => {
-    win.focus();
-    win.print();
+  const frameWindow = iframe.contentWindow;
+  const frameDoc = frameWindow?.document;
+  if (!frameWindow || !frameDoc) {
+    iframe.remove();
+    return;
+  }
+
+  frameDoc.open();
+  frameDoc.write(html);
+  frameDoc.close();
+
+  const cleanup = () => {
+    setTimeout(() => iframe.remove(), 500);
   };
 
-  setTimeout(() => {
+  let printed = false;
+  const runPrint = () => {
+    if (printed) return;
+    printed = true;
     try {
-      win.focus();
-      win.print();
+      frameWindow.focus();
+      frameWindow.print();
     } catch {
-      /* popup blocked or already closed */
+      /* print cancelled or unavailable */
+    } finally {
+      cleanup();
     }
-  }, 250);
+  };
+
+  if (frameDoc.readyState === 'complete') {
+    setTimeout(runPrint, 100);
+  } else {
+    iframe.onload = () => setTimeout(runPrint, 100);
+    setTimeout(runPrint, 400);
+  }
 }

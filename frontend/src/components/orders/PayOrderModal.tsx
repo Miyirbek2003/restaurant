@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -106,6 +107,11 @@ export function PayOrderModal({
     });
   };
 
+  const removeCustomLine = (index: number) => {
+    if (index < 2) return;
+    setCustomLines((prev) => (prev.length <= 2 ? prev : prev.filter((_, i) => i !== index)));
+  };
+
   const valid = paymentLinesValid(paymentLines, bill.grandTotal);
 
   return (
@@ -184,9 +190,9 @@ export function PayOrderModal({
         {preset === 'custom' && (
           <div className="space-y-2">
             {customLines.map((line, idx) => (
-              <div key={idx} className="flex gap-2">
+              <div key={idx} className="flex items-center gap-2">
                 <select
-                  className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
                   value={line.method}
                   onChange={(e) => {
                     const method = e.target.value as PaymentMethod;
@@ -203,10 +209,20 @@ export function PayOrderModal({
                   type="number"
                   min="0"
                   step="0.01"
-                  className="flex-1"
+                  className="w-28 shrink-0"
                   value={line.amount || ''}
                   onChange={(e) => updateCustomAmount(idx, e.target.value)}
                 />
+                {idx >= 2 && (
+                  <button
+                    type="button"
+                    className="shrink-0 rounded p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    onClick={() => removeCustomLine(idx)}
+                    aria-label={t('payModal.removeLine')}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             ))}
             <Button

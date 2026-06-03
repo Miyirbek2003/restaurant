@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, Copy, Link2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
@@ -28,6 +28,8 @@ import { useStockAlerts, useAcknowledgeStockAlert } from '@/hooks/useStockAlerts
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { formatCurrency } from '@/lib/utils';
+import { matchesDateRange } from '@/lib/filters';
+import { DateRangeToolbar, type DateRangeValue } from '@/components/ui/DateRangeToolbar';
 import { t, roleLabel } from '@/i18n';
 
 const statusBadge: Record<string, 'green' | 'yellow' | 'red' | 'gray'> = {
@@ -51,7 +53,24 @@ export function EmployeesPage() {
   const updateStatus = useUpdateStaffStatus();
   const deleteStaff = useDeleteStaffMember();
   const { data: paidOrders = [], isFetching: loadingSales } = useWaiterPaidOrders();
-  const salesByWaiter = summarizeWaiterSales(paidOrders);
+  const [salesDateFilters, setSalesDateFilters] = useState<DateRangeValue>({
+    dateFrom: '',
+    dateTo: '',
+  });
+
+  const filteredPaidOrders = useMemo(
+    () =>
+      paidOrders.filter((o) =>
+        matchesDateRange(o.paid_at, salesDateFilters.dateFrom, salesDateFilters.dateTo),
+      ),
+    [paidOrders, salesDateFilters.dateFrom, salesDateFilters.dateTo],
+  );
+  const salesByWaiter = useMemo(() => summarizeWaiterSales(filteredPaidOrders), [filteredPaidOrders]);
+  const filteredSalesTotal = useMemo(
+    () => salesByWaiter.reduce((s, w) => s + w.totalRevenue, 0),
+    [salesByWaiter],
+  );
+
   const { data: stockAlerts = [] } = useStockAlerts();
   const acknowledgeAlert = useAcknowledgeStockAlert();
   const notify = useNotificationStore((s) => s.add);
@@ -235,18 +254,28 @@ export function EmployeesPage() {
         description={t('employees.waiterHistoryDesc')}
         defaultOpen={false}
         badge={
-          salesByWaiter.length > 0 ? (
-            <Badge color="green" size="sm">{formatCurrency(salesByWaiter.reduce((s, w) => s + w.totalRevenue, 0))}</Badge>
+          filteredSalesTotal > 0 ? (
+            <Badge color="green" size="sm">{formatCurrency(filteredSalesTotal)}</Badge>
           ) : undefined
         }
       >
         {loadingSales ? (
           <Spinner />
-        ) : salesByWaiter.length === 0 ? (
+        ) : paidOrders.length === 0 ? (
           <p className="text-sm text-slate-500">{t('employees.noWaiterSales')}</p>
         ) : (
           <div className="space-y-3">
-            {salesByWaiter.map((w) => (
+            <DateRangeToolbar
+              value={salesDateFilters}
+              onChange={setSalesDateFilters}
+              showQuickFilters
+              showMonthSwitcher
+              onReset={() => setSalesDateFilters({ dateFrom: '', dateTo: '' })}
+            />
+            {salesByWaiter.length === 0 ? (
+              <p className="text-sm text-slate-500">{t('filters.noResults')}</p>
+            ) : (
+              salesByWaiter.map((w) => (
               <CollapsibleSection
                 key={w.staffId}
                 title={w.staffName}
@@ -287,7 +316,8 @@ export function EmployeesPage() {
                   </table>
                 </div>
               </CollapsibleSection>
-            ))}
+              ))
+            )}
           </div>
         )}
       </CollapsibleSection>

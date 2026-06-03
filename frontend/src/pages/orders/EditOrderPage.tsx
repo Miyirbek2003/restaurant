@@ -72,7 +72,11 @@ export function EditOrderPage() {
           <p className="font-bold">
             {t('orders.totalLabel')}: {formatCurrency(Number(order.total))}
           </p>
-          <Button className="w-full" loading={sendKitchen.isPending} onClick={() => sendKitchen.mutate(order.id)}>
+          <Button
+            className="w-full"
+            loading={sendKitchen.isPending && sendKitchen.variables === order.id}
+            onClick={() => sendKitchen.mutate(order.id)}
+          >
             {t('orders.sendToKitchen')}
           </Button>
         </Card>

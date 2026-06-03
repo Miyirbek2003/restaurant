@@ -9,6 +9,7 @@ export type DraftOrderLine = {
   kitchen_qty: number;
   unit_price: number;
   tax_rate: number;
+  created_at?: string | null;
 };
 
 export type ServerOrderLine = {
@@ -19,22 +20,62 @@ export type ServerOrderLine = {
   kitchen_qty?: number;
   unit_price: number;
   tax_rate: number;
+  created_at?: string | null;
   products?: { name: string } | null;
 };
 
+/** Stable kitchen order: when the line was added to the order. */
+export function lineSortTime(line: DraftOrderLine): number {
+  if (line.created_at) return new Date(line.created_at).getTime();
+  const m = /^new-[^-]+-(\d+)$/.exec(line.key);
+  if (m) return Number(m[1]);
+  return 0;
+}
+
+export function sortDraftLines(lines: DraftOrderLine[]): DraftOrderLine[] {
+  return [...lines].sort((a, b) => lineSortTime(a) - lineSortTime(b));
+}
+
+export function sortOrderItemsByCreated<T extends { created_at?: string | null }>(items: T[]): T[] {
+  return [...items].sort(
+    (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
+  );
+}
+
+export type DraftDisplayUnit = {
+  line: DraftOrderLine;
+  unitIndex: number;
+  isLastUnit: boolean;
+};
+
+/** One UI row per unit (no combined "2×" rows). */
+export function expandDraftForDisplay(lines: DraftOrderLine[]): DraftDisplayUnit[] {
+  const rows: DraftDisplayUnit[] = [];
+  for (const line of sortDraftLines(lines)) {
+    const count = Math.max(1, line.quantity);
+    for (let unitIndex = 0; unitIndex < count; unitIndex++) {
+      rows.push({ line, unitIndex, isLastUnit: unitIndex === count - 1 });
+    }
+  }
+  return rows;
+}
+
 export function serverLinesToDraft(items: ServerOrderLine[]): DraftOrderLine[] {
-  return items
-    .filter((i) => i.product_id)
-    .map((i) => ({
-      key: i.id,
-      id: i.id,
-      product_id: i.product_id!,
-      product_name: i.product_name?.trim() || i.products?.name || '',
-      quantity: i.quantity,
-      kitchen_qty: i.kitchen_qty ?? 0,
-      unit_price: Number(i.unit_price),
-      tax_rate: Number(i.tax_rate),
-    }));
+  return sortDraftLines(
+    items
+      .filter((i) => i.product_id)
+      .map((i) => ({
+        key: i.id,
+        id: i.id,
+        product_id: i.product_id!,
+        product_name: i.product_name?.trim() || i.products?.name || '',
+        quantity: i.quantity,
+        kitchen_qty: i.kitchen_qty ?? 0,
+        unit_price: Number(i.unit_price),
+        tax_rate: Number(i.tax_rate),
+        created_at: i.created_at ?? null,
+      })),
+  );
 }
 
 export function draftQtyByProduct(draft: DraftOrderLine[]): Map<string, number> {

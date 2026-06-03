@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { RestaurantRequired } from '@/components/RestaurantRequired';
 import { CloseCashRegisterModal } from '@/components/kassa/CloseCashRegisterModal';
+import { KassaFactBreakdown } from '@/components/kassa/KassaFactBreakdown';
 import {
   useOpenCashRegisterSession,
   useCashRegisterSessions,
@@ -20,6 +21,12 @@ import { useAuth, useRestaurantId } from '@/contexts/AuthContext';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { formatCurrency } from '@/lib/utils';
 import { getErrorMessage } from '@/lib/errors';
+import {
+  lastDaysRange,
+  matchesDateRange,
+  todayRange,
+  yesterdayRange,
+} from '@/lib/filters';
 import { t } from '@/i18n';
 
 export function KassaPage() {
@@ -39,15 +46,47 @@ export function KassaPage() {
   const [openingNotes, setOpeningNotes] = useState('');
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [historyVisibleCount, setHistoryVisibleCount] = useState(pageSize);
+  const [historyCashierId, setHistoryCashierId] = useState('');
+  const [historyDateFrom, setHistoryDateFrom] = useState(() => todayRange().from);
+  const [historyDateTo, setHistoryDateTo] = useState(() => todayRange().to);
+
+  const historyCashierOptions = useMemo(
+    () => [
+      { value: '', label: t('kassa.allCashiers') },
+      ...cashiers.map((c) => ({ value: c.id, label: c.name })),
+    ],
+    [cashiers],
+  );
+
+  const filteredSessions = useMemo(
+    () =>
+      sessions.filter((s) => {
+        if (historyCashierId && s.opened_by_staff_id !== historyCashierId) return false;
+        return matchesDateRange(s.opened_at, historyDateFrom, historyDateTo);
+      }),
+    [sessions, historyCashierId, historyDateFrom, historyDateTo],
+  );
 
   const pagedSessions = useMemo(
-    () => sessions.slice(0, historyVisibleCount),
-    [sessions, historyVisibleCount],
+    () => filteredSessions.slice(0, historyVisibleCount),
+    [filteredSessions, historyVisibleCount],
   );
+
+  const applyHistoryRange = (range: { from: string; to: string }) => {
+    setHistoryDateFrom(range.from);
+    setHistoryDateTo(range.to);
+  };
+
+  const resetHistoryFilters = () => {
+    const range = todayRange();
+    setHistoryCashierId('');
+    setHistoryDateFrom(range.from);
+    setHistoryDateTo(range.to);
+  };
 
   useEffect(() => {
     setHistoryVisibleCount(pageSize);
-  }, [sessions.length]);
+  }, [historyCashierId, historyDateFrom, historyDateTo, filteredSessions.length]);
 
   if (!restaurantId) {
     return (
@@ -186,59 +225,100 @@ export function KassaPage() {
 
       <section className="space-y-3">
         <h3 className="text-lg font-semibold">{t('kassa.history')}</h3>
+        <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="w-full min-w-[12rem] sm:w-auto sm:min-w-[14rem]">
+            <Select
+              label={t('kassa.historyCashier')}
+              value={historyCashierId}
+              onChange={(e) => setHistoryCashierId(e.target.value)}
+              options={historyCashierOptions}
+            />
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button size="sm" variant="secondary" onClick={() => applyHistoryRange(todayRange())}>
+              {t('filters.today')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => applyHistoryRange(yesterdayRange())}>
+              {t('filters.yesterday')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => applyHistoryRange(lastDaysRange(7))}>
+              {t('filters.last7Days')}
+            </Button>
+          </div>
+          <div className="flex w-full shrink-0 items-end sm:ml-auto sm:w-auto">
+            <Button type="button" size="sm" variant="ghost" onClick={resetHistoryFilters}>
+              {t('filters.reset')}
+            </Button>
+          </div>
+        </div>
         {loadingHistory ? (
           <Spinner />
         ) : sessions.length === 0 ? (
           <p className="text-sm text-slate-500">{t('kassa.noHistory')}</p>
+        ) : filteredSessions.length === 0 ? (
+          <p className="text-sm text-slate-500">{t('kassa.noHistoryFiltered')}</p>
         ) : (
           <div className="space-y-2">
-            {pagedSessions.map((s) => (
-              <Card key={s.id} className="p-4 text-sm">
-                <div className="flex flex-wrap justify-between gap-2">
-                  <div>
-                    <p className="font-medium">
-                      {s.opened_by_staff?.name ?? '—'} ·{' '}
-                      <span className={s.status === 'OPEN' ? 'text-emerald-600' : 'text-slate-500'}>
-                        {s.status === 'OPEN' ? t('kassa.openState') : t('kassa.closedLabel')}
-                      </span>
-                    </p>
-                    <p className="text-slate-500">
-                      {format(new Date(s.opened_at), 'PPp')}
-                      {s.closed_at ? ` — ${format(new Date(s.closed_at), 'PPp')}` : ''}
-                    </p>
+            {pagedSessions.map((s) => {
+              const expectedTotal =
+                Number(s.expected_cash) + Number(s.expected_card) + Number(s.expected_click);
+              const factTotal =
+                Number(s.counted_cash ?? 0) + Number(s.counted_card ?? 0) + Number(s.counted_click ?? 0);
+              const shortage = s.status === 'CLOSED' ? expectedTotal - factTotal : 0;
+
+              return (
+                <Card key={s.id} className="space-y-3 p-4 text-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">
+                        {s.opened_by_staff?.name ?? '—'} ·{' '}
+                        <span className={s.status === 'OPEN' ? 'text-emerald-600' : 'text-slate-500'}>
+                          {s.status === 'OPEN' ? t('kassa.openState') : t('kassa.closedLabel')}
+                        </span>
+                      </p>
+                      <p className="text-slate-500">
+                        {format(new Date(s.opened_at), 'PPp')}
+                        {s.closed_at ? ` — ${format(new Date(s.closed_at), 'PPp')}` : ''}
+                      </p>
+                    </div>
+                    {s.status === 'CLOSED' && (
+                      <div className="shrink-0 text-right">
+                        <p className="text-xs text-slate-500">{t('cashRegister.total')}</p>
+                        <p className="text-lg font-bold tabular-nums">{formatCurrency(expectedTotal)}</p>
+                      </div>
+                    )}
                   </div>
                   {s.status === 'CLOSED' && (
-                    <div className="text-right tabular-nums">
-                      <p className="font-bold">{formatCurrency(Number(s.expected_cash) + Number(s.expected_card) + Number(s.expected_click))}</p>
-                      <p className="text-xs text-slate-500">
-                        {t('kassa.countedShort', {
-                          cash: formatCurrency(Number(s.counted_cash ?? 0)),
-                          card: formatCurrency(Number(s.counted_card ?? 0)),
-                          click: formatCurrency(Number(s.counted_click ?? 0)),
-                        })}
-                      </p>
-                      {(() => {
-                        const expectedTotal = Number(s.expected_cash) + Number(s.expected_card) + Number(s.expected_click);
-                        const factTotal = Number(s.counted_cash ?? 0) + Number(s.counted_card ?? 0) + Number(s.counted_click ?? 0);
-                        const shortage = expectedTotal - factTotal;
-                        if (shortage <= 0) return null;
-                        return (
-                          <p className="text-xs font-semibold text-red-600 dark:text-red-400">
-                            {t('kassa.shortage')}: {formatCurrency(shortage)}
-                          </p>
-                        );
-                      })()}
-                    </div>
+                    <>
+                      <KassaFactBreakdown
+                        title={t('kassa.factLabel')}
+                        cash={Number(s.counted_cash ?? 0)}
+                        card={Number(s.counted_card ?? 0)}
+                        click={Number(s.counted_click ?? 0)}
+                      />
+                      {shortage > 0 && (
+                        <p className="text-right text-xs font-semibold text-red-600 dark:text-red-400">
+                          {t('kassa.shortage')}: {formatCurrency(shortage)}
+                        </p>
+                      )}
+                    </>
                   )}
-                </div>
-              </Card>
-            ))}
-            <div className="flex justify-center pt-2">
+                </Card>
+              );
+            })}
+            <div className="flex justify-end gap-2 pt-2">
+              {historyVisibleCount > pageSize && (
+                <Button size="sm" variant="ghost" onClick={() => setHistoryVisibleCount(pageSize)}>
+                  {t('common.cancel')}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="secondary"
-                disabled={historyVisibleCount >= sessions.length}
-                onClick={() => setHistoryVisibleCount((v) => Math.min(v + pageSize, sessions.length))}
+                disabled={historyVisibleCount >= filteredSessions.length}
+                onClick={() =>
+                  setHistoryVisibleCount((v) => Math.min(v + pageSize, filteredSessions.length))
+                }
               >
                 {t('common.next')}
               </Button>

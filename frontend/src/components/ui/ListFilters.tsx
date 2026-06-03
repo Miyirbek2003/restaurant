@@ -1,5 +1,6 @@
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Button } from '@/components/ui/Button';
 import { t } from '@/i18n';
 
 export type ListFiltersValue = {
@@ -18,6 +19,8 @@ type ListFiltersProps = {
   categoryOptions?: { value: string; label: string }[];
   categoryLabel?: string;
   className?: string;
+  beforeDates?: React.ReactNode;
+  onReset?: () => void;
 };
 
 export function ListFilters({
@@ -29,6 +32,8 @@ export function ListFilters({
   categoryOptions,
   categoryLabel,
   className = '',
+  beforeDates,
+  onReset,
 }: ListFiltersProps) {
   const set = (patch: Partial<ListFiltersValue>) => onChange({ ...value, ...patch });
 
@@ -46,6 +51,7 @@ export function ListFilters({
           />
         </div>
       )}
+      {beforeDates}
       {showDates && (
         <>
           <div className="w-full sm:w-auto sm:min-w-[9rem]">
@@ -74,6 +80,13 @@ export function ListFilters({
             onChange={(e) => set({ category: e.target.value })}
             options={categoryOptions}
           />
+        </div>
+      )}
+      {onReset && (
+        <div className="flex w-full shrink-0 items-end sm:ml-auto sm:w-auto">
+          <Button type="button" size="sm" variant="ghost" onClick={onReset}>
+            {t('filters.reset')}
+          </Button>
         </div>
       )}
     </div>

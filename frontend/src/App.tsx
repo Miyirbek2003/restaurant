@@ -23,6 +23,7 @@ import { CustomersPage } from '@/pages/customers/CustomersPage';
 import { DiscountsPage } from '@/pages/discounts/DiscountsPage';
 import { EmployeesPage } from '@/pages/employees/EmployeesPage';
 import { KassaPage } from '@/pages/kassa/KassaPage';
+import { ProductProfitPage } from '@/pages/profit/ProductProfitPage';
 import type { UserRole } from '@/types';
 import { getHomeForRole } from '@/lib/roles';
 import { useAuth } from '@/contexts/AuthContext';
@@ -76,6 +77,14 @@ export default function App() {
         <Route path="orders/new" element={<ProtectedRoute roles={waiterAndManager}><CreateOrderPage /></ProtectedRoute>} />
         <Route path="orders/:id/edit" element={<ProtectedRoute roles={waiterAndManager}><EditOrderPage /></ProtectedRoute>} />
         <Route path="kassa" element={<ProtectedRoute roles={cashierAndManager}><KassaPage /></ProtectedRoute>} />
+        <Route
+          path="product-profit"
+          element={
+            <ProtectedRoute roles={['MANAGER']}>
+              <ProductProfitPage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="kitchen" element={<Navigate to="/orders" replace />} />
 
