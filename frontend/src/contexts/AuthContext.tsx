@@ -49,7 +49,7 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
 
   const { data: restaurant } = await supabase
     .from('restaurants')
-    .select('id, name, slug, status, currency')
+    .select('id, name, slug, status, currency, address, phone, email')
     .eq('id', profile.restaurant_id)
     .maybeSingle();
 

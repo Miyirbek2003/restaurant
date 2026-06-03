@@ -15,17 +15,21 @@ import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { getWaiterName } from '@/lib/orderUtils';
 import { buildOrderBill, SERVICE_FEE_RATE } from '@/lib/orderBilling';
-import { canEditOrderItems, canPayOrder, isCountableProduct } from '@/lib/orderEdit';
+import { canEditOrderItems, canPayOrder, isCountableProduct, isLineInKitchen, minLineQuantity } from '@/lib/orderEdit';
 import {
   isDraftDirty,
+  isUnsavedOrderLine,
   serverLinesToDraft,
+  validateOrderItemEditsForWaiter,
   type DraftOrderLine,
   type ServerOrderLine,
 } from '@/lib/orderItemSave';
-import { canOperateCashRegister, canPlaceOrders } from '@/lib/roles';
+import { canOperateCashRegister, canPlaceOrders, isManager } from '@/lib/roles';
 import { reportStockShortage, type StockFailure } from '@/lib/stock';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
+import { printCheckForOrder, printReceiptForOrder, restaurantFromProfile } from '@/lib/receipt';
+import type { PaymentLine } from '@/lib/payments';
 import { t, orderStatus } from '@/i18n';
 import type { OrderStatus } from '@/types';
 
@@ -69,6 +73,7 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
   const notify = useNotificationStore((s) => s.add);
   const mayEditRole = canPlaceOrders(profile?.role);
   const mayPayRole = canOperateCashRegister(profile?.role);
+  const isManagerUser = Boolean(profile?.role && isManager(profile.role));
   const { data: openKassa } = useOpenCashRegisterSession();
   const { data: myStaffId } = useMyStaffId();
 
@@ -157,7 +162,14 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
       prev
         .map((line) => {
           if (line.key !== key) return line;
+          const floor = minLineQuantity(line.kitchen_qty, isManagerUser);
           const quantity = line.quantity + delta;
+          if (quantity < floor) {
+            if (delta < 0) {
+              notify({ type: 'warning', title: t('orderDetail.itemInKitchenLocked') });
+            }
+            return line;
+          }
           return quantity > 0 ? { ...line, quantity } : null;
         })
         .filter((line): line is DraftOrderLine => line != null),
@@ -165,7 +177,13 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
   };
 
   const removeLine = (key: string) => {
-    setDraft((prev) => prev.filter((line) => line.key !== key));
+    const line = draft.find((l) => l.key === key);
+    if (!line) return;
+    if (!isManagerUser && !isUnsavedOrderLine(line)) {
+      notify({ type: 'warning', title: t('orderDetail.existingItemLocked') });
+      return;
+    }
+    setDraft((prev) => prev.filter((l) => l.key !== key));
   };
 
   const addProduct = (p: ProductRow) => {
@@ -181,9 +199,11 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
     }
 
     setDraft((prev) => {
-      const existing = prev.find((l) => l.product_id === p.id);
-      if (existing) {
-        return prev.map((l) => (l.product_id === p.id ? { ...l, quantity: l.quantity + 1 } : l));
+      const mergeTarget = isManagerUser
+        ? prev.find((l) => l.product_id === p.id)
+        : prev.find((l) => l.product_id === p.id && isUnsavedOrderLine(l));
+      if (mergeTarget) {
+        return prev.map((l) => (l.key === mergeTarget.key ? { ...l, quantity: l.quantity + 1 } : l));
       }
       return [
         ...prev,
@@ -192,6 +212,7 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
           product_id: p.id,
           product_name: p.name,
           quantity: 1,
+          kitchen_qty: 0,
           unit_price: Number(p.price),
           tax_rate: Number(p.tax_rate ?? 10),
         },
@@ -201,6 +222,10 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
 
   const handleSave = async () => {
     if (!orderId || !dirty) return;
+    if (!isManagerUser && !validateOrderItemEditsForWaiter(baseline, draft)) {
+      notify({ type: 'warning', title: t('orderDetail.existingItemLocked') });
+      return;
+    }
     try {
       await saveItems.mutateAsync({ orderId, original: baseline, draft });
       await refetch();
@@ -221,12 +246,18 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
     onClose();
   };
 
-  const confirmPay = (grandTotal: number) => {
+  const handlePrintCheck = () => {
+    if (!order || !bill) return;
+    printCheckForOrder(order, tableName, restaurantFromProfile(profile?.restaurants), bill);
+  };
+
+  const confirmPay = (grandTotal: number, payments: PaymentLine[]) => {
     if (!order || !openKassa) return;
     closeOrder.mutate(
       {
         orderId: order.id,
         amount: grandTotal,
+        payments,
         tableId: order.table_id,
         cashRegisterSessionId: openKassa.id,
       },
@@ -237,6 +268,12 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
             title: t('orders.paymentRecorded'),
             message: formatCurrency(grandTotal),
           });
+          printReceiptForOrder(
+            order,
+            tableName,
+            restaurantFromProfile(profile?.restaurants),
+            payments,
+          );
           setPayOpen(false);
           onClose();
         },
@@ -285,7 +322,7 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
 
           {canEdit && (
             <p className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-              {t('orderDetail.editHint')}
+              {isManagerUser ? t('orderDetail.editHintManager') : t('orderDetail.editHintWaiter')}
             </p>
           )}
 
@@ -320,36 +357,60 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
             {displayItems.length === 0 ? (
               <p className="text-sm text-slate-500">{t('orderDetail.noItems')}</p>
             ) : (
-              displayItems.map((item) => (
+              displayItems.map((item) => {
+                const isNewLine = isUnsavedOrderLine(item);
+                const floor = minLineQuantity(item.kitchen_qty, isManagerUser);
+                const canDecrease = isManagerUser && item.quantity > floor;
+                const canIncrease = isManagerUser;
+                const canRemove = isManagerUser || isNewLine;
+                const showControls = canEdit && (isManagerUser || isNewLine);
+                return (
                 <div key={item.key} className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <DottedRow
                       label={`${item.quantity}× ${item.product_name || t('common.item')}`}
                       value={formatCurrency(item.unit_price * item.quantity)}
                     />
+                    {isNewLine && !isManagerUser && (
+                      <p className="mt-0.5 text-xs text-primary-600 dark:text-primary-400">
+                        {t('orderDetail.newItemPending')}
+                      </p>
+                    )}
+                    {isManagerUser && isLineInKitchen(item.kitchen_qty) && (
+                      <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+                        {t('orderDetail.inKitchenQty', { n: item.kitchen_qty })}
+                      </p>
+                    )}
                   </div>
-                  {canEdit && (
+                  {showControls && (
                     <div className="flex shrink-0 items-center gap-0.5">
+                      {isManagerUser && (
+                        <>
+                          <button
+                            type="button"
+                            className="rounded p-1 hover:bg-slate-100 disabled:opacity-40 dark:hover:bg-slate-800"
+                            disabled={!canDecrease}
+                            onClick={() => changeLineQty(item.key, -1)}
+                            aria-label={t('orderDetail.decreaseQty')}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="w-6 text-center text-sm tabular-nums">{item.quantity}</span>
+                          <button
+                            type="button"
+                            className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            disabled={!canIncrease}
+                            onClick={() => changeLineQty(item.key, 1)}
+                            aria-label={t('orderDetail.increaseQty')}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
                       <button
                         type="button"
-                        className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
-                        onClick={() => changeLineQty(item.key, -1)}
-                        aria-label={t('orderDetail.decreaseQty')}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </button>
-                      <span className="w-6 text-center text-sm tabular-nums">{item.quantity}</span>
-                      <button
-                        type="button"
-                        className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
-                        onClick={() => changeLineQty(item.key, 1)}
-                        aria-label={t('orderDetail.increaseQty')}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                        className="rounded p-1 text-red-500 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-950/30"
+                        disabled={!canRemove}
                         onClick={() => removeLine(item.key)}
                         aria-label={t('orderDetail.removeItem')}
                       >
@@ -358,7 +419,8 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
                     </div>
                   )}
                 </div>
-              ))
+              );
+              })
             )}
           </div>
 
@@ -390,7 +452,11 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
                             ({p.stock_quantity} {t('orderDetail.inStock')})
                           </span>
                         </span>
-                        <Button size="sm" disabled={outOfStock || atLimit} onClick={() => addProduct(p)}>
+                        <Button
+                          size="sm"
+                          disabled={outOfStock || atLimit}
+                          onClick={() => addProduct(p)}
+                        >
                           {t('common.add')}
                         </Button>
                       </li>
@@ -408,7 +474,6 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
             {Number(order.discount_amount) > 0 && (
               <DottedRow label={t('orderDetail.discount')} value={`−${formatCurrency(Number(order.discount_amount))}`} />
             )}
-            {bill.taxAmount > 0 && <DottedRow label={t('orderDetail.tax')} value={formatCurrency(bill.taxAmount)} />}
             <DottedRow label={t('orderDetail.serviceFee', { n: servicePct })} value={formatCurrency(bill.serviceFee)} />
           </div>
 
@@ -422,23 +487,28 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
               {t('common.cancel')}
             </Button>
             {mayPayRole && status && canPayOrder(status) && (
-              <Button
-                type="button"
-                disabled={Boolean(openKassa && !isKassaOwner)}
-                onClick={() => {
-                  if (!openKassa) {
-                    notify({ type: 'warning', title: t('kassa.mustOpenFirst') });
-                    return;
-                  }
-                  if (!isKassaOwner) {
-                    notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
-                    return;
-                  }
-                  setPayOpen(true);
-                }}
-              >
-                {t('orders.pay')}
-              </Button>
+              <>
+                <Button type="button" variant="secondary" onClick={handlePrintCheck}>
+                  {t('orders.printCheck')}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={Boolean(openKassa && !isKassaOwner)}
+                  onClick={() => {
+                    if (!openKassa) {
+                      notify({ type: 'warning', title: t('kassa.mustOpenFirst') });
+                      return;
+                    }
+                    if (!isKassaOwner) {
+                      notify({ type: 'warning', title: t('kassa.openedByAnotherCashier') });
+                      return;
+                    }
+                    setPayOpen(true);
+                  }}
+                >
+                  {t('orders.pay')}
+                </Button>
+              </>
             )}
             {canEdit && (
               <Button type="button" loading={saveItems.isPending} disabled={!dirty} onClick={() => void handleSave()}>
@@ -460,6 +530,7 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
           taxAmount={bill.taxAmount}
           loading={closeOrder.isPending}
           onConfirm={confirmPay}
+          onPrintCheck={handlePrintCheck}
         />
       )}
     </Modal>

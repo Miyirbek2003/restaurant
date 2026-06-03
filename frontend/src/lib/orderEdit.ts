@@ -21,6 +21,16 @@ export function orderStockWasDeducted(order: {
   return Boolean(order.stock_deducted);
 }
 
+/** Minimum quantity a role may set on a line (0 = can remove). */
+export function minLineQuantity(kitchenQty: number, isManagerUser: boolean): number {
+  return isManagerUser ? 0 : Math.max(0, kitchenQty);
+}
+
+/** True when the line has quantity already sent to kitchen. */
+export function isLineInKitchen(kitchenQty: number): boolean {
+  return kitchenQty > 0;
+}
+
 /** Menu products with tracked quantity (POS countable items). */
 export function isCountableProduct(product: { stock_quantity: number; is_active?: boolean }): boolean {
   return product.is_active !== false;

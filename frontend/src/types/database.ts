@@ -141,6 +141,7 @@ export interface Database {
           product_id: string | null;
           product_name: string;
           quantity: number;
+          kitchen_qty: number;
           unit_price: number;
           tax_rate: number;
           notes: string | null;

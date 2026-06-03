@@ -40,6 +40,15 @@ export function KassaPage() {
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [historyVisibleCount, setHistoryVisibleCount] = useState(pageSize);
 
+  const pagedSessions = useMemo(
+    () => sessions.slice(0, historyVisibleCount),
+    [sessions, historyVisibleCount],
+  );
+
+  useEffect(() => {
+    setHistoryVisibleCount(pageSize);
+  }, [sessions.length]);
+
   if (!restaurantId) {
     return (
       <div className="space-y-6">
@@ -58,14 +67,6 @@ export function KassaPage() {
   );
 
   const cashierOptions = cashiers.map((c) => ({ value: c.id, label: c.name }));
-  const pagedSessions = useMemo(
-    () => sessions.slice(0, historyVisibleCount),
-    [sessions, historyVisibleCount],
-  );
-
-  useEffect(() => {
-    setHistoryVisibleCount(pageSize);
-  }, [sessions.length]);
 
   const handleOpen = async (e: React.FormEvent) => {
     e.preventDefault();

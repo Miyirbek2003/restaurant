@@ -28,6 +28,12 @@ export function getErrorMessage(error: unknown): string {
   if (raw === 'KITCHEN_ITEM_NOT_FOR_MENU') {
     return t('warehouse.kitchenNotForMenu');
   }
+  if (/ITEM_IN_KITCHEN/i.test(raw)) {
+    return t('errors.itemInKitchen');
+  }
+  if (raw === 'ITEM_IN_KITCHEN') {
+    return t('errors.itemInKitchen');
+  }
   if (raw === 'ORDER_NOT_EDITABLE') {
     return t('errors.orderNotEditable');
   }

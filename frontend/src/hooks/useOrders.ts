@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRestaurantId, useAuth } from '@/contexts/AuthContext';
-import { isCashier, isWaiter } from '@/lib/roles';
+import { isCashier, isManager, isWaiter } from '@/lib/roles';
 import { fetchMyStaffId } from '@/lib/staffInvite';
 import {
   validateOrderStock,
@@ -17,6 +17,7 @@ import {
   buildOrderItemSaveOps,
   stockDeltasFromOps,
   stockFailureError,
+  validateOrderItemEditsForWaiter,
   type DraftOrderLine,
 } from '@/lib/orderItemSave';
 import type { OrderStatus } from '@/types';
@@ -278,6 +279,7 @@ export function useAddOrderItem() {
 }
 
 export function useUpdateOrderItemQuantity() {
+  const { profile } = useAuth();
   const qc = useQueryClient();
 
   return useMutation({
@@ -295,11 +297,15 @@ export function useUpdateOrderItemQuantity() {
 
       const { data: item, error: iErr } = await supabase
         .from('order_items')
-        .select('id, product_id, quantity')
+        .select('id, product_id, quantity, kitchen_qty')
         .eq('id', itemId)
         .eq('order_id', orderId)
         .single();
       if (iErr) throw iErr;
+
+      if (profile?.role && !isManager(profile.role)) {
+        if (quantity !== item.quantity) throw new Error('ITEM_IN_KITCHEN');
+      }
 
       if (quantity <= 0) {
         if (stockDeducted && item.product_id) {
@@ -380,6 +386,7 @@ export function useSendToKitchen() {
 
 export function useSaveOrderItems() {
   const restaurantId = useRestaurantId();
+  const { profile } = useAuth();
   const qc = useQueryClient();
 
   return useMutation({
@@ -392,9 +399,17 @@ export function useSaveOrderItems() {
       original: DraftOrderLine[];
       draft: DraftOrderLine[];
     }) => {
+      if (profile?.role && !isManager(profile.role) && !validateOrderItemEditsForWaiter(original, draft)) {
+        throw new Error('ITEM_IN_KITCHEN');
+      }
+
+      const ops = buildOrderItemSaveOps(original, draft);
+      if (profile?.role && !isManager(profile.role) && ops.some((op) => op.type !== 'insert')) {
+        throw new Error('ITEM_IN_KITCHEN');
+      }
+
       const order = await fetchOrderForEdit(orderId);
       const stockDeducted = orderStockWasDeducted(order);
-      const ops = buildOrderItemSaveOps(original, draft);
       if (ops.length === 0) return;
 
       if (stockDeducted) {
@@ -443,7 +458,7 @@ export function useSaveOrderItems() {
             .limit(1)
             .maybeSingle();
 
-          if (existing) {
+          if (existing && profile?.role && isManager(profile.role)) {
             const { error } = await supabase
               .from('order_items')
               .update({ quantity: existing.quantity + op.quantity })
@@ -472,6 +487,7 @@ export function useSaveOrderItems() {
 }
 
 export function useRemoveOrderItem() {
+  const { profile } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ itemId, orderId }: { itemId: string; orderId: string }) => {
@@ -480,10 +496,14 @@ export function useRemoveOrderItem() {
 
       const { data: item, error: iErr } = await supabase
         .from('order_items')
-        .select('product_id, quantity')
+        .select('product_id, quantity, kitchen_qty')
         .eq('id', itemId)
         .single();
       if (iErr) throw iErr;
+
+      if (profile?.role && !isManager(profile.role)) {
+        throw new Error('ITEM_IN_KITCHEN');
+      }
 
       if (stockDeducted && item.product_id) {
         await restoreOrderStock([{ product_id: item.product_id, quantity: item.quantity }]);
@@ -609,6 +629,7 @@ export function useCreateOrderWithItems() {
           product_id: line.product_id,
           product_name: product.name,
           quantity: line.quantity,
+          kitchen_qty: body.sendToKitchen ? line.quantity : 0,
           unit_price: product.price,
           tax_rate: product.tax_rate,
         });

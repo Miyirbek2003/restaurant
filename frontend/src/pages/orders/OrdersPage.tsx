@@ -10,6 +10,7 @@ import { OrderDetailModal } from '@/components/orders/OrderDetailModal';
 import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
 import { useOrders, useSendToKitchen, useCloseOrder, useUpdateOrderStatus } from '@/hooks/useOrders';
 import { useMyStaffId } from '@/hooks/useMyStaff';
+import { printCheckForOrder, printReceiptForOrder, restaurantFromProfile } from '@/lib/receipt';
 import type { PaymentLine } from '@/lib/payments';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
@@ -187,8 +188,17 @@ export function OrdersPage() {
     });
   };
 
+  const printCheck = (order: OrderRow) => {
+    printCheckForOrder(
+      order,
+      order.tables?.name ?? t('common.takeaway'),
+      restaurantFromProfile(profile?.restaurants),
+    );
+  };
+
   const confirmPay = (grandTotal: number, payments: PaymentLine[]) => {
     if (!payOrder || !openKassa) return;
+    const tableName = payOrder.tables?.name ?? t('common.takeaway');
     closeOrder.mutate(
       {
         orderId: payOrder.id,
@@ -200,6 +210,7 @@ export function OrdersPage() {
       {
         onSuccess: () => {
           notify({ type: 'success', title: t('orders.paymentRecorded'), message: formatCurrency(grandTotal) });
+          printReceiptForOrder(payOrder, tableName, restaurantFromProfile(profile?.restaurants), payments);
           setPayOrder(null);
         },
         onError: (err) =>
@@ -329,9 +340,14 @@ export function OrdersPage() {
                     </Button>
                   )}
                   {canPay && canPayOrder(order.status) && (
-                    <Button size="sm" disabled={Boolean(openKassa && !isKassaOwner)} onClick={() => startPay(order)}>
-                      {t('orders.pay')}
-                    </Button>
+                    <>
+                      <Button size="sm" variant="secondary" onClick={() => printCheck(order)}>
+                        {t('orders.printCheck')}
+                      </Button>
+                      <Button size="sm" disabled={Boolean(openKassa && !isKassaOwner)} onClick={() => startPay(order)}>
+                        {t('orders.pay')}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -357,6 +373,14 @@ export function OrdersPage() {
           taxAmount={Number(payOrder.tax_amount)}
           loading={closeOrder.isPending}
           onConfirm={confirmPay}
+          onPrintCheck={() => {
+            if (!payOrder) return;
+            printCheckForOrder(
+              payOrder,
+              payOrder.tables?.name ?? t('common.takeaway'),
+              restaurantFromProfile(profile?.restaurants),
+            );
+          }}
         />
       )}
     </div>

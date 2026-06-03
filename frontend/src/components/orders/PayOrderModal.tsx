@@ -34,6 +34,7 @@ type PayOrderModalProps = {
   taxAmount: number;
   loading?: boolean;
   onConfirm: (grandTotal: number, payments: PaymentLine[]) => void;
+  onPrintCheck?: () => void;
 };
 
 function DottedRow({ label, value }: { label: string; value: string }) {
@@ -58,6 +59,7 @@ export function PayOrderModal({
   taxAmount,
   loading,
   onConfirm,
+  onPrintCheck,
 }: PayOrderModalProps) {
   const bill = buildOrderBill(items, subtotal, taxAmount);
   const servicePct = Math.round(SERVICE_FEE_RATE * 100);
@@ -124,9 +126,6 @@ export function PayOrderModal({
 
       <div className="space-y-2">
         <DottedRow label={t('payModal.mealTotal')} value={formatCurrency(bill.mealSubtotal)} />
-        {bill.taxAmount > 0 && (
-          <DottedRow label={t('orderDetail.tax')} value={formatCurrency(bill.taxAmount)} />
-        )}
         <DottedRow label={t('payModal.serviceFee', { n: servicePct })} value={formatCurrency(bill.serviceFee)} />
       </div>
 
@@ -252,6 +251,11 @@ export function PayOrderModal({
         <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
           {t('common.cancel')}
         </Button>
+        {onPrintCheck && (
+          <Button type="button" variant="secondary" onClick={onPrintCheck} disabled={loading}>
+            {t('payModal.printCheck')}
+          </Button>
+        )}
         <Button
           type="button"
           loading={loading}

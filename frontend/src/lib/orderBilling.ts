@@ -1,4 +1,6 @@
-export const SERVICE_FEE_RATE = 0.15;
+import { orderItemName, type OrderItemNameSource } from '@/lib/orderItem';
+
+export const SERVICE_FEE_RATE = 0.1;
 
 export type BillLine = {
   id: string;
@@ -16,8 +18,6 @@ export type OrderBill = {
   grandTotal: number;
 };
 
-import { orderItemName, type OrderItemNameSource } from '@/lib/orderItem';
-
 type OrderItemRow = OrderItemNameSource & {
   id: string;
   quantity: number;
@@ -28,7 +28,7 @@ type OrderItemRow = OrderItemNameSource & {
 export function buildOrderBill(
   items: OrderItemRow[],
   orderSubtotal: number,
-  orderTax: number,
+  _orderTax = 0,
   serviceRate = SERVICE_FEE_RATE,
 ): OrderBill {
   const lines: BillLine[] = items.map((item) => {
@@ -48,9 +48,8 @@ export function buildOrderBill(
     ? lines.reduce((s, l) => s + l.lineTotal, 0)
     : Number(orderSubtotal);
 
-  const taxAmount = Number(orderTax) || 0;
   const serviceFee = mealSubtotal * serviceRate;
-  const grandTotal = mealSubtotal + serviceFee + taxAmount;
+  const grandTotal = mealSubtotal + serviceFee;
 
-  return { lines, mealSubtotal, taxAmount, serviceFee, grandTotal };
+  return { lines, mealSubtotal, taxAmount: 0, serviceFee, grandTotal };
 }

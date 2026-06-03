@@ -6,6 +6,7 @@ export type DraftOrderLine = {
   product_id: string;
   product_name: string;
   quantity: number;
+  kitchen_qty: number;
   unit_price: number;
   tax_rate: number;
 };
@@ -15,6 +16,7 @@ export type ServerOrderLine = {
   product_id: string | null;
   product_name?: string | null;
   quantity: number;
+  kitchen_qty?: number;
   unit_price: number;
   tax_rate: number;
   products?: { name: string } | null;
@@ -29,6 +31,7 @@ export function serverLinesToDraft(items: ServerOrderLine[]): DraftOrderLine[] {
       product_id: i.product_id!,
       product_name: i.product_name?.trim() || i.products?.name || '',
       quantity: i.quantity,
+      kitchen_qty: i.kitchen_qty ?? 0,
       unit_price: Number(i.unit_price),
       tax_rate: Number(i.tax_rate),
     }));
@@ -120,4 +123,24 @@ export function stockFailureError(failures: StockFailure[]): Error & { stockFail
   const err = new Error('INSUFFICIENT_STOCK') as Error & { stockFailures?: StockFailure[] };
   err.stockFailures = failures;
   return err;
+}
+
+/** Waiters may only append new lines; existing lines must stay unchanged. */
+export function validateOrderItemEditsForWaiter(
+  original: DraftOrderLine[],
+  draft: DraftOrderLine[],
+): boolean {
+  const draftByKey = new Map(draft.map((l) => [l.key, l]));
+
+  for (const line of original) {
+    const next = draftByKey.get(line.key);
+    if (!next) return false;
+    if (next.quantity !== line.quantity) return false;
+  }
+
+  return true;
+}
+
+export function isUnsavedOrderLine(line: DraftOrderLine): boolean {
+  return !line.id;
 }
