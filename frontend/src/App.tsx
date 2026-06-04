@@ -15,6 +15,7 @@ import { RestaurantsPage } from '@/pages/admin/RestaurantsPage';
 import { AdminAnalyticsPage } from '@/pages/admin/AdminAnalyticsPage';
 import { PublicMenuPage } from '@/pages/public/PublicMenuPage';
 import { QrMenuPage } from '@/pages/qr/QrMenuPage';
+import { SettingsPage } from '@/pages/settings/SettingsPage';
 import { SuppliersPage } from '@/pages/suppliers/SuppliersPage';
 import { ExpensesPage } from '@/pages/expenses/ExpensesPage';
 import { IncomesPage } from '@/pages/incomes/IncomesPage';
@@ -97,6 +98,7 @@ export default function App() {
         <Route path="discounts" element={<ProtectedRoute roles={managerOnly}><DiscountsPage /></ProtectedRoute>} />
         <Route path="employees" element={<ProtectedRoute roles={managerOnly}><EmployeesPage /></ProtectedRoute>} />
         <Route path="qr-menu" element={<ProtectedRoute roles={managerOnly}><QrMenuPage /></ProtectedRoute>} />
+        <Route path="settings" element={<ProtectedRoute roles={['MANAGER']}><SettingsPage /></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<CatchAllRedirect />} />

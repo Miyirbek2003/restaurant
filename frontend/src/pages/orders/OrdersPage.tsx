@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Settings } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -17,8 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { getWaiterName, orderDateForFilter } from '@/lib/orderUtils';
 import { canEditOrderItems, canPayOrder } from '@/lib/orderEdit';
-import { canCreateOrders, canPlaceOrders, canOperateCashRegister, isManager } from '@/lib/roles';
-import { ServiceFeeSettingsModal } from '@/components/orders/ServiceFeeSettingsModal';
+import { canCreateOrders, canPlaceOrders, canOperateCashRegister } from '@/lib/roles';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { reportStockShortage, type StockFailure } from '@/lib/stock';
@@ -124,8 +123,6 @@ export function OrdersPage() {
   };
   const [payOrder, setPayOrder] = useState<OrderRow | null>(null);
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
-  const [serviceFeeOpen, setServiceFeeOpen] = useState(false);
-  const canManageSettings = Boolean(profile?.role && isManager(profile.role));
   const canUpdateItems = canPlaceOrders(profile?.role);
   const canPay = canOperateCashRegister(profile?.role);
   const isKassaOwner = Boolean(
@@ -238,16 +235,6 @@ export function OrdersPage() {
           <p className="text-sm text-slate-500">{t('orders.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
-          {canManageSettings && (
-            <Button
-              variant="secondary"
-              onClick={() => setServiceFeeOpen(true)}
-              title={t('orders.serviceFeeSettingsTitle')}
-              aria-label={t('orders.serviceFeeSettingsTitle')}
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          )}
           {canCreateOrders(profile?.role) && !cashierCreateBlocked && (
             <Link to="/orders/new">
               <Button>
@@ -445,7 +432,6 @@ export function OrdersPage() {
         />
       )}
 
-      <ServiceFeeSettingsModal open={serviceFeeOpen} onClose={() => setServiceFeeOpen(false)} />
     </div>
   );
 }

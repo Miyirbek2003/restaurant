@@ -17,6 +17,7 @@ import {
   Building2,
   BarChart3,
   TrendingUp,
+  Settings,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -88,6 +89,7 @@ const navGroups: NavGroup[] = [
       { to: '/customers', labelKey: 'nav.customers', icon: UserCircle, roles: ['MANAGER'] },
       { to: '/discounts', labelKey: 'nav.discounts', icon: Percent, roles: ['MANAGER'] },
       { to: '/qr-menu', labelKey: 'nav.qrMenu', icon: QrCode, roles: ['MANAGER'] },
+      { to: '/settings', labelKey: 'nav.settings', icon: Settings, roles: ['MANAGER'] },
     ],
   },
 ];
