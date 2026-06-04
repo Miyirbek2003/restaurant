@@ -4,7 +4,9 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatCurrency } from '@/lib/utils';
-import { buildOrderBill, SERVICE_FEE_RATE } from '@/lib/orderBilling';
+import { buildOrderBill, DEFAULT_SERVICE_FEE_RATE, type OrderBill } from '@/lib/orderBilling';
+import { useServiceChargeRate } from '@/hooks/useRestaurantSettings';
+import { resolveTableChargeAmount, tableHasCharge, type TableChargeFields } from '@/lib/tableCharge';
 import {
   buildSplitFromPreset,
   PAYMENT_METHOD_LABEL_KEYS,
@@ -32,9 +34,9 @@ type PayOrderModalProps = {
   tableName: string;
   items: OrderItem[];
   subtotal: number;
-  taxAmount: number;
+  table?: TableChargeFields | null;
   loading?: boolean;
-  onConfirm: (grandTotal: number, payments: PaymentLine[]) => void;
+  onConfirm: (grandTotal: number, payments: PaymentLine[], bill: OrderBill) => void;
   onPrintCheck?: () => void;
 };
 
@@ -57,13 +59,27 @@ export function PayOrderModal({
   tableName,
   items,
   subtotal,
-  taxAmount,
+  table,
   loading,
   onConfirm,
   onPrintCheck,
 }: PayOrderModalProps) {
-  const bill = buildOrderBill(items, subtotal, taxAmount);
-  const servicePct = Math.round(SERVICE_FEE_RATE * 100);
+  const { data: serviceRate, isLoading: serviceRateLoading } = useServiceChargeRate();
+  const resolvedServiceRate = serviceRate ?? (serviceRateLoading ? DEFAULT_SERVICE_FEE_RATE : 0);
+  const isHourly = table?.charge_type === 'HOURLY';
+  const [hours, setHours] = useState('1');
+
+  const tableCharge = useMemo(() => {
+    if (!tableHasCharge(table)) return 0;
+    const h = isHourly ? parseFloat(hours) || 0 : 1;
+    return resolveTableChargeAmount(table, h);
+  }, [table, isHourly, hours]);
+
+  const bill = useMemo(
+    () => buildOrderBill(items, subtotal, resolvedServiceRate, tableCharge),
+    [items, subtotal, resolvedServiceRate, tableCharge],
+  );
+  const servicePct = Math.round(bill.serviceRate * 100);
 
   const [preset, setPreset] = useState<SplitPresetId>('single');
   const [singleMethod, setSingleMethod] = useState<PaymentMethod>('CASH');
@@ -76,6 +92,7 @@ export function PayOrderModal({
     if (!open) return;
     setPreset('single');
     setSingleMethod('CASH');
+    setHours('1');
     setCustomLines([
       { method: 'CASH', amount: 0 },
       { method: 'CLICK', amount: 0 },
@@ -114,6 +131,11 @@ export function PayOrderModal({
 
   const valid = paymentLinesValid(paymentLines, bill.grandTotal);
 
+  const tableChargeLabel =
+    table?.charge_type === 'HOURLY'
+      ? t('payModal.tableChargeHourly', { n: hours })
+      : t('payModal.tableChargeOnce');
+
   return (
     <Modal open={open} onClose={onClose} title={t('payModal.title', { n: orderNumber })} className="max-w-md">
       <p className="mb-4 text-sm text-slate-500">{tableName}</p>
@@ -132,8 +154,27 @@ export function PayOrderModal({
 
       <div className="space-y-2">
         <DottedRow label={t('payModal.mealTotal')} value={formatCurrency(bill.mealSubtotal)} />
+        {bill.tableCharge > 0 && (
+          <DottedRow label={tableChargeLabel} value={formatCurrency(bill.tableCharge)} />
+        )}
         <DottedRow label={t('payModal.serviceFee', { n: servicePct })} value={formatCurrency(bill.serviceFee)} />
+        {bill.serviceRate === 0 && (
+          <p className="text-xs text-slate-500">{t('orders.serviceFeeZeroHint')}</p>
+        )}
       </div>
+
+      {isHourly && tableHasCharge(table) && (
+        <div className="mt-4">
+          <Input
+            label={t('payModal.tableHours')}
+            type="number"
+            min="0"
+            step="0.5"
+            value={hours}
+            onChange={(e) => setHours(e.target.value)}
+          />
+        </div>
+      )}
 
       <hr className="my-4 border-slate-900 dark:border-slate-100" />
 
@@ -276,7 +317,7 @@ export function PayOrderModal({
           type="button"
           loading={loading}
           disabled={!valid || loading}
-          onClick={() => onConfirm(bill.grandTotal, paymentLines)}
+          onClick={() => onConfirm(bill.grandTotal, paymentLines, bill)}
         >
           {t('payModal.pay')}
         </Button>

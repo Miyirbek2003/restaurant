@@ -105,6 +105,8 @@ export interface Database {
           capacity: number;
           floor: string | null;
           status: TableStatus;
+          charge_type: 'NONE' | 'HOURLY' | 'ONE_TIME';
+          charge_amount: number;
           created_at: string;
           updated_at: string;
         };

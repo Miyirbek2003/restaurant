@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Settings } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -16,7 +17,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { getWaiterName, orderDateForFilter } from '@/lib/orderUtils';
 import { canEditOrderItems, canPayOrder } from '@/lib/orderEdit';
-import { canCreateOrders, canPlaceOrders, canOperateCashRegister } from '@/lib/roles';
+import { canCreateOrders, canPlaceOrders, canOperateCashRegister, isManager } from '@/lib/roles';
+import { ServiceFeeSettingsModal } from '@/components/orders/ServiceFeeSettingsModal';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { reportStockShortage, type StockFailure } from '@/lib/stock';
@@ -24,6 +26,10 @@ import { t, orderStatus } from '@/i18n';
 import { matchesDateRange, matchesSearch, todayRange, yesterdayRange } from '@/lib/filters';
 import { ListFilters, type ListFiltersValue } from '@/components/ui/ListFilters';
 import type { OrderStatus } from '@/types';
+import type { OrderBill } from '@/lib/orderBilling';
+import { computeOrderCardTotals } from '@/lib/orderCardTotals';
+import { useServiceChargeRate } from '@/hooks/useRestaurantSettings';
+import { DEFAULT_SERVICE_FEE_RATE } from '@/lib/orderBilling';
 
 const statusColor: Record<string, 'green' | 'yellow' | 'blue' | 'gray' | 'red'> = {
   DRAFT: 'gray',
@@ -55,12 +61,12 @@ type OrderRow = {
   order_number: number;
   status: OrderStatus;
   subtotal: number;
-  tax_amount: number;
+  discount_amount?: number;
   total: number;
   table_id: string | null;
   created_at: string;
   paid_at: string | null;
-  tables: { name: string } | null;
+  tables: { name: string; charge_type?: string; charge_amount?: number } | null;
   staff?: { name: string; role?: string } | null;
   order_items?: {
     id: string;
@@ -97,6 +103,8 @@ export function OrdersPage() {
   const { data: openKassa } = useOpenCashRegisterSession();
   const { data: myStaffId } = useMyStaffId();
   const { data: orders, isLoading } = useOrders();
+  const { data: serviceRate, isLoading: serviceRateLoading } = useServiceChargeRate();
+  const resolvedServiceRate = serviceRate ?? (serviceRateLoading ? DEFAULT_SERVICE_FEE_RATE : 0);
   const sendKitchen = useSendToKitchen();
   const closeOrder = useCloseOrder();
   const updateStatus = useUpdateOrderStatus();
@@ -116,6 +124,8 @@ export function OrdersPage() {
   };
   const [payOrder, setPayOrder] = useState<OrderRow | null>(null);
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
+  const [serviceFeeOpen, setServiceFeeOpen] = useState(false);
+  const canManageSettings = Boolean(profile?.role && isManager(profile.role));
   const canUpdateItems = canPlaceOrders(profile?.role);
   const canPay = canOperateCashRegister(profile?.role);
   const isKassaOwner = Boolean(
@@ -197,7 +207,7 @@ export function OrdersPage() {
     });
   };
 
-  const confirmPay = (grandTotal: number, payments: PaymentLine[]) => {
+  const confirmPay = (grandTotal: number, payments: PaymentLine[], bill: OrderBill) => {
     if (!payOrder || !openKassa) return;
     const tableName = payOrder.tables?.name ?? t('common.takeaway');
     closeOrder.mutate(
@@ -211,7 +221,7 @@ export function OrdersPage() {
       {
         onSuccess: () => {
           notify({ type: 'success', title: t('orders.paymentRecorded'), message: formatCurrency(grandTotal) });
-          printReceiptForOrder(payOrder, tableName, restaurantFromProfile(profile?.restaurants), payments);
+          printReceiptForOrder(payOrder, tableName, restaurantFromProfile(profile?.restaurants), payments, new Date(), bill);
           setPayOrder(null);
         },
         onError: (err) =>
@@ -227,13 +237,25 @@ export function OrdersPage() {
           <h2 className="page-title">{t('orders.title')}</h2>
           <p className="text-sm text-slate-500">{t('orders.subtitle')}</p>
         </div>
-        {canCreateOrders(profile?.role) && !cashierCreateBlocked && (
-          <Link to="/orders/new">
-            <Button>
-              <Plus className="h-4 w-4" /> {t('orders.newOrder')}
+        <div className="flex items-center gap-2">
+          {canManageSettings && (
+            <Button
+              variant="secondary"
+              onClick={() => setServiceFeeOpen(true)}
+              title={t('orders.serviceFeeSettingsTitle')}
+              aria-label={t('orders.serviceFeeSettingsTitle')}
+            >
+              <Settings className="h-4 w-4" />
             </Button>
-          </Link>
-        )}
+          )}
+          {canCreateOrders(profile?.role) && !cashierCreateBlocked && (
+            <Link to="/orders/new">
+              <Button>
+                <Plus className="h-4 w-4" /> {t('orders.newOrder')}
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       <ListFilters
@@ -282,6 +304,7 @@ export function OrdersPage() {
             const items = order.order_items ?? [];
             const tableName = order.tables?.name ?? t('common.takeaway');
             const isTakeaway = !order.tables?.name;
+            const totals = computeOrderCardTotals(order, resolvedServiceRate);
 
             return (
               <div
@@ -303,16 +326,21 @@ export function OrdersPage() {
                       {tableName}
                     </p>
                     <p className="mt-0.5 text-sm text-slate-500">{getWaiterName(order)}</p>
+                    {order.paid_at && (
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        {t('orderDetail.paidAt')}: {format(new Date(order.paid_at), 'dd.MM.yyyy HH:mm')}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge color={statusColor[order.status] ?? 'gray'} size="sm">
                       {orderStatus(order.status)}
                     </Badge>
-                    <span className="font-bold">{formatCurrency(Number(order.total))}</span>
+                    <span className="font-bold tabular-nums">{formatCurrency(totals.displayTotal)}</span>
                   </div>
                 </div>
 
-                {items.length > 0 && (
+                {(items.length > 0 || totals.displayTotal > 0) && (
                   <ul className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-sm dark:border-slate-800">
                     {items.map((item) => (
                       <li key={item.id} className="flex justify-between gap-4 text-slate-600 dark:text-slate-400">
@@ -324,6 +352,32 @@ export function OrdersPage() {
                         </span>
                       </li>
                     ))}
+                    <li className="flex justify-between gap-4 border-t border-slate-100 pt-2 text-slate-600 dark:border-slate-800 dark:text-slate-400">
+                      <span>{t('orders.orderSubtotal')}</span>
+                      <span className="tabular-nums">{formatCurrency(totals.subtotal)}</span>
+                    </li>
+                    {totals.showServiceLine && (
+                      <li className="flex justify-between gap-4 text-slate-600 dark:text-slate-400">
+                        <span>{t('payModal.serviceFee', { n: totals.servicePct })}</span>
+                        <span className="tabular-nums">{formatCurrency(totals.serviceFee)}</span>
+                      </li>
+                    )}
+                    {totals.tableCharge > 0.01 && (
+                      <li className="flex justify-between gap-4 text-slate-600 dark:text-slate-400">
+                        <span>{t('orderDetail.tableCharge')}</span>
+                        <span className="tabular-nums">{formatCurrency(totals.tableCharge)}</span>
+                      </li>
+                    )}
+                    {totals.discount > 0.01 && (
+                      <li className="flex justify-between gap-4 text-slate-600 dark:text-slate-400">
+                        <span>{t('orderDetail.discount')}</span>
+                        <span className="tabular-nums">−{formatCurrency(totals.discount)}</span>
+                      </li>
+                    )}
+                    <li className="flex justify-between gap-4 pt-1 font-semibold text-slate-800 dark:text-slate-200">
+                      <span>{t('orders.orderTotal')}</span>
+                      <span className="tabular-nums">{formatCurrency(totals.displayTotal)}</span>
+                    </li>
                   </ul>
                 )}
 
@@ -375,9 +429,9 @@ export function OrdersPage() {
           onClose={() => setPayOrder(null)}
           orderNumber={payOrder.order_number}
           tableName={payOrder.tables?.name ?? t('common.takeaway')}
+          table={payOrder.tables}
           items={payOrder.order_items ?? []}
           subtotal={Number(payOrder.subtotal)}
-          taxAmount={Number(payOrder.tax_amount)}
           loading={closeOrder.isPending}
           onConfirm={confirmPay}
           onPrintCheck={() => {
@@ -390,6 +444,8 @@ export function OrdersPage() {
           }}
         />
       )}
+
+      <ServiceFeeSettingsModal open={serviceFeeOpen} onClose={() => setServiceFeeOpen(false)} />
     </div>
   );
 }

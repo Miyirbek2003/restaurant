@@ -15,6 +15,7 @@ import {
   useUpdateTable,
   useDeleteTable,
   type TableStatus,
+  type TableChargeType,
 } from '@/hooks/useTables';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRestaurantId } from '@/contexts/AuthContext';
@@ -71,7 +72,15 @@ export function TablesPage() {
   const [capacity, setCapacity] = useState('4');
   const [floor, setFloor] = useState<string>(DEFAULT_FLOORS[0]);
   const [status, setStatus] = useState<TableStatus>('FREE');
+  const [chargeType, setChargeType] = useState<TableChargeType>('NONE');
+  const [chargeAmount, setChargeAmount] = useState('');
   const [viewOrderId, setViewOrderId] = useState<string | null>(null);
+
+  const chargeTypeOptions = [
+    { value: 'NONE', label: t('tables.chargeNone') },
+    { value: 'ONE_TIME', label: t('tables.chargeOneTime') },
+    { value: 'HOURLY', label: t('tables.chargeHourly') },
+  ];
 
   const floorOptions = floors.map((f) => ({ value: f, label: f }));
 
@@ -105,27 +114,44 @@ export function TablesPage() {
     setCapacity('4');
     setFloor(floors[0] ?? DEFAULT_FLOORS[0]);
     setStatus('FREE');
+    setChargeType('NONE');
+    setChargeAmount('');
     setEditId(null);
     setModal('add');
   };
 
-  const openEdit = (t: { id: string; name: string; capacity: number; floor: string | null; status: string }) => {
+  const openEdit = (t: {
+    id: string;
+    name: string;
+    capacity: number;
+    floor: string | null;
+    status: string;
+    charge_type?: string;
+    charge_amount?: number;
+  }) => {
     setEditId(t.id);
     setName(t.name);
     setCapacity(String(t.capacity));
     setFloor(t.floor && floors.includes(t.floor) ? t.floor : floors[0] ?? DEFAULT_FLOORS[0]);
     setStatus(t.status as TableStatus);
+    setChargeType((t.charge_type as TableChargeType) || 'NONE');
+    setChargeAmount(t.charge_amount ? String(t.charge_amount) : '');
     setModal('edit');
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    const chargePayload = {
+      charge_type: chargeType,
+      charge_amount: chargeType === 'NONE' ? 0 : parseFloat(chargeAmount) || 0,
+    };
     try {
       if (modal === 'add') {
         await createTable.mutateAsync({
           name,
           capacity: parseInt(capacity, 10),
           floor,
+          ...chargePayload,
         });
         notify({ type: 'success', title: t('tables.tableAdded') });
       } else if (editId) {
@@ -135,6 +161,7 @@ export function TablesPage() {
           capacity: parseInt(capacity, 10),
           floor,
           status,
+          ...chargePayload,
         });
         notify({ type: 'success', title: t('tables.tableUpdated') });
       }
@@ -247,6 +274,16 @@ export function TablesPage() {
                     {table.waiterName ?? '—'}
                   </dd>
                 </div>
+                {table.charge_type && table.charge_type !== 'NONE' && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-500">{t('tables.chargeLabel')}</dt>
+                    <dd className="font-medium tabular-nums">
+                      {table.charge_type === 'HOURLY'
+                        ? t('tables.chargeHourlyShort', { amount: table.charge_amount ?? 0 })
+                        : t('tables.chargeOnceShort', { amount: table.charge_amount ?? 0 })}
+                    </dd>
+                  </div>
+                )}
               </dl>
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
                 {canOrder && table.status === 'FREE' && (
@@ -361,6 +398,23 @@ export function TablesPage() {
               required
             />
             <Select label={t('tables.floor')} value={floor} onChange={(e) => setFloor(e.target.value)} options={floorOptions} />
+            <Select
+              label={t('tables.chargeType')}
+              value={chargeType}
+              onChange={(e) => setChargeType(e.target.value as TableChargeType)}
+              options={chargeTypeOptions}
+            />
+            {chargeType !== 'NONE' && (
+              <Input
+                label={chargeType === 'HOURLY' ? t('tables.chargeAmountHourly') : t('tables.chargeAmountOnce')}
+                type="number"
+                min="0"
+                step="0.01"
+                value={chargeAmount}
+                onChange={(e) => setChargeAmount(e.target.value)}
+                required
+              />
+            )}
             {modal === 'edit' && (
               <Select
                 label={t('tables.statusLabel')}

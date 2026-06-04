@@ -14,7 +14,9 @@ import { useProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { getTableName, getWaiterName } from '@/lib/orderUtils';
-import { buildOrderBill, SERVICE_FEE_RATE } from '@/lib/orderBilling';
+import { buildOrderBill, DEFAULT_SERVICE_FEE_RATE, type OrderBill } from '@/lib/orderBilling';
+import { useServiceChargeRate } from '@/hooks/useRestaurantSettings';
+import { resolveTableChargeAmount } from '@/lib/tableCharge';
 import { canEditOrderItems, canPayOrder, isCountableProduct, isLineInKitchen, minLineQuantity } from '@/lib/orderEdit';
 import {
   expandDraftForDisplay,
@@ -79,6 +81,8 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
   const { data: myStaffId } = useMyStaffId();
 
   const { data: order, isLoading, isError, refetch } = useOrder(open ? orderId ?? undefined : undefined);
+  const { data: serviceRate, isLoading: serviceRateLoading } = useServiceChargeRate();
+  const resolvedServiceRate = serviceRate ?? (serviceRateLoading ? DEFAULT_SERVICE_FEE_RATE : 0);
   const [search, setSearch] = useState('');
   const [baseline, setBaseline] = useState<DraftOrderLine[]>([]);
   const [draft, setDraft] = useState<DraftOrderLine[]>([]);
@@ -122,13 +126,11 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
       product_name: d.product_name,
     }));
     const mealSubtotal = rows.reduce((s, r) => s + r.unit_price * r.quantity, 0);
-    const taxAmount = draft.reduce(
-      (s, d) => s + d.unit_price * d.quantity * (d.tax_rate / 100),
-      0,
-    );
-    return buildOrderBill(rows, mealSubtotal, taxAmount);
-  }, [order, draft]);
-  const servicePct = Math.round(SERVICE_FEE_RATE * 100);
+    const tableInfo = order.tables as { charge_type?: string; charge_amount?: number } | null;
+    const tableCharge = resolveTableChargeAmount(tableInfo, 1);
+    return buildOrderBill(rows, mealSubtotal, resolvedServiceRate, tableCharge);
+  }, [order, draft, resolvedServiceRate]);
+  const servicePct = bill ? Math.round(bill.serviceRate * 100) : 0;
   const tableName = order ? getTableName(order, t('common.takeaway')) : t('common.takeaway');
 
   const qtyInDraft = useMemo(() => {
@@ -246,7 +248,7 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
     printCheckForOrder(order, tableName, restaurantFromProfile(profile?.restaurants), bill);
   };
 
-  const confirmPay = (grandTotal: number, payments: PaymentLine[]) => {
+  const confirmPay = (grandTotal: number, payments: PaymentLine[], paidBill: OrderBill) => {
     if (!order || !openKassa) return;
     closeOrder.mutate(
       {
@@ -268,6 +270,8 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
             tableName,
             restaurantFromProfile(profile?.restaurants),
             payments,
+            new Date(),
+            paidBill,
           );
           setPayOpen(false);
           onClose();
@@ -470,7 +474,13 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
             {Number(order.discount_amount) > 0 && (
               <DottedRow label={t('orderDetail.discount')} value={`−${formatCurrency(Number(order.discount_amount))}`} />
             )}
+            {bill.tableCharge > 0 && (
+              <DottedRow label={t('orderDetail.tableCharge')} value={formatCurrency(bill.tableCharge)} />
+            )}
             <DottedRow label={t('orderDetail.serviceFee', { n: servicePct })} value={formatCurrency(bill.serviceFee)} />
+            {bill.serviceRate === 0 && (
+              <p className="text-xs text-slate-500">{t('orders.serviceFeeZeroHint')}</p>
+            )}
           </div>
 
           <div className="flex items-baseline justify-between border-t border-slate-900 pt-3 dark:border-slate-100">
@@ -516,9 +526,9 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
           onClose={() => setPayOpen(false)}
           orderNumber={order.order_number}
           tableName={tableName}
+          table={order.tables as { charge_type?: string; charge_amount?: number } | null}
           items={payItems}
           subtotal={bill.mealSubtotal}
-          taxAmount={bill.taxAmount}
           loading={closeOrder.isPending}
           onConfirm={confirmPay}
           onPrintCheck={handlePrintCheck}

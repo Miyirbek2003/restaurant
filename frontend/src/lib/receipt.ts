@@ -1,5 +1,5 @@
 import type { OrderBill } from '@/lib/orderBilling';
-import { buildOrderBill } from '@/lib/orderBilling';
+import { buildOrderBill, DEFAULT_SERVICE_FEE_RATE } from '@/lib/orderBilling';
 import { printOrderReceipt, type OrderReceiptData } from '@/lib/printOrderReceipt';
 import type { PaymentLine } from '@/lib/payments';
 import { getWaiterName } from '@/lib/orderUtils';
@@ -16,7 +16,6 @@ type RestaurantInfo = {
 type OrderForReceipt = {
   order_number: number;
   subtotal: number;
-  tax_amount?: number;
   order_items?: Array<
     OrderItemNameSource & {
       id: string;
@@ -41,7 +40,8 @@ export function printReceiptForOrder(
   billOverride?: OrderBill,
 ): void {
   const items = sortOrderItemsByCreated(order.order_items ?? []);
-  const bill: OrderBill = billOverride ?? buildOrderBill(items, Number(order.subtotal), 0);
+  const bill: OrderBill =
+    billOverride ?? buildOrderBill(items, Number(order.subtotal), DEFAULT_SERVICE_FEE_RATE, 0);
 
   const data: OrderReceiptData = {
     restaurantName: restaurant.name,
@@ -84,7 +84,7 @@ export function billFromOrderItems(
   items: Array<OrderItemNameSource & { id: string; quantity: number; unit_price: number }>,
   subtotal: number,
 ): OrderBill {
-  return buildOrderBill(items, subtotal, 0);
+  return buildOrderBill(items, subtotal, DEFAULT_SERVICE_FEE_RATE, 0);
 }
 
 export { orderItemName };

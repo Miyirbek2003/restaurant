@@ -1,6 +1,38 @@
 import { orderItemName, type OrderItemNameSource } from '@/lib/orderItem';
 
-export const SERVICE_FEE_RATE = 0.1;
+/** Fallback only when restaurant has no settings row yet. */
+export const DEFAULT_SERVICE_FEE_RATE = 0.1;
+export const DEFAULT_SERVICE_FEE_PERCENT = 10;
+/** @deprecated Use DEFAULT_SERVICE_FEE_RATE or useServiceChargeSettings(). */
+export const SERVICE_FEE_RATE = DEFAULT_SERVICE_FEE_RATE;
+
+export type TableChargeType = 'NONE' | 'HOURLY' | 'ONE_TIME';
+
+export function serviceChargePercentFromSettings(
+  dbPercent: number | null | undefined,
+  settingsExist: boolean,
+): number {
+  if (!settingsExist) return DEFAULT_SERVICE_FEE_PERCENT;
+  return Math.max(0, Number(dbPercent ?? 0));
+}
+
+export function serviceChargeRateFromSettings(
+  dbPercent: number | null | undefined,
+  settingsExist: boolean,
+): number {
+  return serviceChargePercentFromSettings(dbPercent, settingsExist) / 100;
+}
+
+export function computeTableCharge(
+  type: TableChargeType | string | null | undefined,
+  amount: number,
+  hours = 1,
+): number {
+  const rate = Math.max(0, Number(amount) || 0);
+  if (type === 'ONE_TIME') return rate;
+  if (type === 'HOURLY') return rate * Math.max(0, hours);
+  return 0;
+}
 
 export type BillLine = {
   id: string;
@@ -13,9 +45,10 @@ export type BillLine = {
 export type OrderBill = {
   lines: BillLine[];
   mealSubtotal: number;
-  taxAmount: number;
   serviceFee: number;
+  tableCharge: number;
   grandTotal: number;
+  serviceRate: number;
 };
 
 type OrderItemRow = OrderItemNameSource & {
@@ -28,8 +61,8 @@ type OrderItemRow = OrderItemNameSource & {
 export function buildOrderBill(
   items: OrderItemRow[],
   orderSubtotal: number,
-  _orderTax = 0,
-  serviceRate = SERVICE_FEE_RATE,
+  serviceRate = DEFAULT_SERVICE_FEE_RATE,
+  tableCharge = 0,
 ): OrderBill {
   const lines: BillLine[] = items.map((item) => {
     const unitPrice = Number(item.unit_price);
@@ -49,7 +82,15 @@ export function buildOrderBill(
     : Number(orderSubtotal);
 
   const serviceFee = mealSubtotal * serviceRate;
-  const grandTotal = mealSubtotal + serviceFee;
+  const safeTableCharge = Math.max(0, Number(tableCharge) || 0);
+  const grandTotal = mealSubtotal + serviceFee + safeTableCharge;
 
-  return { lines, mealSubtotal, taxAmount: 0, serviceFee, grandTotal };
+  return {
+    lines,
+    mealSubtotal,
+    serviceFee,
+    tableCharge: safeTableCharge,
+    grandTotal,
+    serviceRate,
+  };
 }

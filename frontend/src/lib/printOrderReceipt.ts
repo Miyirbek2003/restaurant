@@ -1,6 +1,5 @@
 import { format } from 'date-fns';
 import type { BillLine, OrderBill } from '@/lib/orderBilling';
-import { SERVICE_FEE_RATE } from '@/lib/orderBilling';
 import type { PaymentLine } from '@/lib/payments';
 import { formatCurrency } from '@/lib/utils';
 import { t } from '@/i18n';
@@ -9,6 +8,8 @@ export type OrderReceiptData = {
   restaurantName: string;
   address?: string | null;
   phone?: string | null;
+  openingTime?: string | null;
+  closingTime?: string | null;
   orderNumber: number;
   tableName: string;
   waiterName: string;
@@ -139,7 +140,7 @@ function receiptStyles(): string {
 }
 
 export function buildOrderReceiptHtml(data: OrderReceiptData): string {
-  const servicePct = Math.round(SERVICE_FEE_RATE * 100);
+  const servicePct = Math.round(data.bill.serviceRate * 100);
   const paidLabel = format(data.paidAt, 'dd/MM/yyyy HH:mm');
   const receiptCode = `${data.orderNumber}${format(data.paidAt, 'yyyyMMddHHmm')}`;
   const contactLines = [
@@ -187,6 +188,7 @@ export function buildOrderReceiptHtml(data: OrderReceiptData): string {
     <hr class="rule" />
 
     <div class="row"><span>${escapeHtml(t('receipt.subtotal'))}</span><span>${escapeHtml(formatCurrency(data.bill.mealSubtotal))}</span></div>
+    ${data.bill.tableCharge > 0 ? `<div class="row"><span>${escapeHtml(t('receipt.tableCharge'))}</span><span>${escapeHtml(formatCurrency(data.bill.tableCharge))}</span></div>` : ''}
     <div class="row"><span>${escapeHtml(t('receipt.serviceFee', { n: servicePct }))}</span><span>${escapeHtml(formatCurrency(data.bill.serviceFee))}</span></div>
     <div class="row total-row"><span>${escapeHtml(t('receipt.total'))}</span><span>${escapeHtml(formatCurrency(data.bill.grandTotal))}</span></div>
 

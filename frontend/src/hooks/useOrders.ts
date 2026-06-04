@@ -55,7 +55,7 @@ async function deductOrderLines(lines: { product_id: string; quantity: number }[
 
 const orderSelect = `
   *,
-  tables(name),
+  tables(name, charge_type, charge_amount),
   staff:restaurant_staff(name, role),
   order_items(*, products(name))
 `;
@@ -741,7 +741,12 @@ export function useCloseOrder() {
 
       const { data, error } = await supabase
         .from('orders')
-        .update({ status: 'PAID', paid_at: new Date().toISOString() })
+        .update({
+          status: 'PAID',
+          paid_at: new Date().toISOString(),
+          total: amount,
+          tax_amount: 0,
+        })
         .eq('id', orderId)
         .select(orderSelect)
         .single();

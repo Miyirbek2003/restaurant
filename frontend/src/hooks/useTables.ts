@@ -5,6 +5,7 @@ import { useRestaurantId } from '@/contexts/AuthContext';
 import { OPEN_ORDER_STATUSES } from '@/lib/tableOrder';
 
 export type TableStatus = 'FREE' | 'OCCUPIED' | 'RESERVED' | 'CLEANING';
+export type TableChargeType = 'NONE' | 'HOURLY' | 'ONE_TIME';
 
 export function useTables() {
   const restaurantId = useRestaurantId();
@@ -109,7 +110,13 @@ export function useCreateTable() {
   const restaurantId = useRestaurantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { name: string; capacity: number; floor?: string }) => {
+    mutationFn: async (body: {
+      name: string;
+      capacity: number;
+      floor?: string;
+      charge_type?: TableChargeType;
+      charge_amount?: number;
+    }) => {
       if (!restaurantId) throw new Error('No restaurant assigned');
       const { data, error } = await supabase
         .from('tables')
@@ -138,6 +145,8 @@ export function useUpdateTable() {
       capacity?: number;
       floor?: string;
       status?: TableStatus;
+      charge_type?: TableChargeType;
+      charge_amount?: number;
     }) => {
       const { data, error } = await supabase.from('tables').update(body).eq('id', id).select().single();
       if (error) throw error;
