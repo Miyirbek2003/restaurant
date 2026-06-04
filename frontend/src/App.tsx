@@ -16,6 +16,7 @@ import { AdminAnalyticsPage } from '@/pages/admin/AdminAnalyticsPage';
 import { PublicMenuPage } from '@/pages/public/PublicMenuPage';
 import { QrMenuPage } from '@/pages/qr/QrMenuPage';
 import { SettingsPage } from '@/pages/settings/SettingsPage';
+import { BookingsPage } from '@/pages/bookings/BookingsPage';
 import { SuppliersPage } from '@/pages/suppliers/SuppliersPage';
 import { ExpensesPage } from '@/pages/expenses/ExpensesPage';
 import { IncomesPage } from '@/pages/incomes/IncomesPage';
@@ -74,6 +75,7 @@ export default function App() {
         <Route path="menu/products" element={<Navigate to="/menu" replace />} />
 
         <Route path="tables" element={<ProtectedRoute roles={cashierAndWaiterAndManager}><TablesPage /></ProtectedRoute>} />
+        <Route path="bookings" element={<ProtectedRoute roles={cashierAndWaiterAndManager}><BookingsPage /></ProtectedRoute>} />
         <Route path="orders" element={<ProtectedRoute roles={cashierAndWaiterAndManager}><OrdersPage /></ProtectedRoute>} />
         <Route path="orders/new" element={<ProtectedRoute roles={waiterAndManager}><CreateOrderPage /></ProtectedRoute>} />
         <Route path="orders/:id/edit" element={<ProtectedRoute roles={waiterAndManager}><EditOrderPage /></ProtectedRoute>} />

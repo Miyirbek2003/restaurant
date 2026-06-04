@@ -1,13 +1,14 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
-import { Notifications } from '@/components/ui/Notifications';
 import { MobileNavProvider } from '@/contexts/MobileNavContext';
 import { useEffect } from 'react';
 import { useThemeStore } from '@/stores/themeStore';
+import { useBookingArrivalAlerts } from '@/hooks/useBookingArrivalAlerts';
 
 export function DashboardLayout() {
   const dark = useThemeStore((s) => s.dark);
+  useBookingArrivalAlerts();
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -24,7 +25,6 @@ export function DashboardLayout() {
           </main>
         </div>
       </div>
-      <Notifications />
     </MobileNavProvider>
   );
 }

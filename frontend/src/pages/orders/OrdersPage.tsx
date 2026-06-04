@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/Button';
 import { PayOrderModal } from '@/components/orders/PayOrderModal';
 import { OrderDetailModal } from '@/components/orders/OrderDetailModal';
 import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
-import { useOrders, useSendToKitchen, useCloseOrder, useUpdateOrderStatus } from '@/hooks/useOrders';
+import { useOrders, useSendToKitchen, useCloseOrder, useUpdateOrderStatus, useDiscardOrder } from '@/hooks/useOrders';
+import { useLiveSecond } from '@/hooks/useLiveSecond';
+import { canDiscardOrder, discardSecondsRemaining } from '@/lib/orderDiscard';
 import { useMyStaffId } from '@/hooks/useMyStaff';
 import { printCheckForOrder, printReceiptForOrder, restaurantFromProfile } from '@/lib/receipt';
 import type { PaymentLine } from '@/lib/payments';
@@ -107,6 +109,7 @@ export function OrdersPage() {
   const sendKitchen = useSendToKitchen();
   const closeOrder = useCloseOrder();
   const updateStatus = useUpdateOrderStatus();
+  const discardOrder = useDiscardOrder();
 
   const [view, setView] = useState<ViewFilter>('active');
   const [filters, setFilters] = useState<ListFiltersValue>(() => {
@@ -145,6 +148,19 @@ export function OrdersPage() {
     setPayOrder(order);
   };
 
+  const handleDiscard = (order: OrderRow) => {
+    if (!canDiscardOrder(order)) {
+      notify({ type: 'warning', title: t('errors.orderDiscardWindowExpired') });
+      return;
+    }
+    if (!window.confirm(t('orders.discardConfirm', { n: order.order_number }))) return;
+    discardOrder.mutate(order.id, {
+      onSuccess: () => notify({ type: 'success', title: t('orders.discardSuccess') }),
+      onError: (err) =>
+        notify({ type: 'error', title: t('common.error'), message: getErrorMessage(err) }),
+    });
+  };
+
   const orderList = (orders ?? []) as OrderRow[];
 
   const periodOrders = useMemo(
@@ -181,6 +197,12 @@ export function OrdersPage() {
     () => periodOrders.filter((o) => matchesView(o, view)),
     [periodOrders, view],
   );
+
+  const hasDiscardableOrders = useMemo(
+    () => Boolean(canUpdateItems && filtered.some((o) => canDiscardOrder(o))),
+    [canUpdateItems, filtered],
+  );
+  useLiveSecond(hasDiscardableOrders);
 
   const sendToKitchen = (orderId: string) => {
     sendKitchen.mutate(orderId, {
@@ -369,6 +391,19 @@ export function OrdersPage() {
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                  {canUpdateItems && canDiscardOrder(order) && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      loading={discardOrder.isPending && discardOrder.variables === order.id}
+                      onClick={() => handleDiscard(order)}
+                    >
+                      {t('orders.discardOrder')}
+                      <span className="text-xs opacity-80">
+                        ({discardSecondsRemaining(order.created_at)}s)
+                      </span>
+                    </Button>
+                  )}
                   {canUpdateItems && canEditOrderItems(order.status) && (
                     <Button size="sm" variant="secondary" onClick={() => setDetailOrderId(order.id)}>
                       {t('orders.updateItems')}

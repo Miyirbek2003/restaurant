@@ -6,7 +6,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
-import { useOrder, useSaveOrderItems, useCloseOrder } from '@/hooks/useOrders';
+import { useOrder, useSaveOrderItems, useCloseOrder, useDiscardOrder } from '@/hooks/useOrders';
+import { useLiveSecond } from '@/hooks/useLiveSecond';
+import { canDiscardOrder, discardSecondsRemaining } from '@/lib/orderDiscard';
 import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
 import { useMyStaffId } from '@/hooks/useMyStaff';
 import { PayOrderModal } from '@/components/orders/PayOrderModal';
@@ -89,10 +91,13 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
 
   const saveItems = useSaveOrderItems();
   const closeOrder = useCloseOrder();
+  const discardOrder = useDiscardOrder();
   const [payOpen, setPayOpen] = useState(false);
 
   const status = order?.status as OrderStatus | undefined;
   const canEdit = Boolean(mayEditRole && status && canEditOrderItems(status));
+  const showDiscardCountdown = Boolean(open && order && canDiscardOrder(order));
+  useLiveSecond(showDiscardCountdown);
   const isKassaOwner = Boolean(
     openKassa &&
       ((openKassa.opened_by_profile_id && openKassa.opened_by_profile_id === profile?.id) ||
@@ -241,6 +246,23 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
   const handleClose = () => {
     if (dirty && !window.confirm(t('orderDetail.discardChanges'))) return;
     onClose();
+  };
+
+  const handleDiscardOrder = () => {
+    if (!order) return;
+    if (!canDiscardOrder(order)) {
+      notify({ type: 'warning', title: t('errors.orderDiscardWindowExpired') });
+      return;
+    }
+    if (!window.confirm(t('orders.discardConfirm', { n: order.order_number }))) return;
+    discardOrder.mutate(order.id, {
+      onSuccess: () => {
+        notify({ type: 'success', title: t('orders.discardSuccess') });
+        onClose();
+      },
+      onError: (err) =>
+        notify({ type: 'error', title: t('common.error'), message: getErrorMessage(err) }),
+    });
   };
 
   const handlePrintCheck = () => {
@@ -492,6 +514,16 @@ export function OrderDetailModal({ orderId, open, onClose }: OrderDetailModalPro
             <Button type="button" variant="ghost" onClick={handleClose}>
               {t('common.cancel')}
             </Button>
+            {showDiscardCountdown && order && (
+              <Button
+                type="button"
+                variant="danger"
+                loading={discardOrder.isPending}
+                onClick={() => void handleDiscardOrder()}
+              >
+                {t('orders.discardOrder')} ({discardSecondsRemaining(order.created_at)}s)
+              </Button>
+            )}
             {mayPayRole && status && canPayOrder(status) && (
               <Button
                 type="button"

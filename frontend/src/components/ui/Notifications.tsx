@@ -10,10 +10,11 @@ const styles = {
 };
 
 export function Notifications() {
-  const { items, remove } = useNotificationStore();
+  const toasts = useNotificationStore((s) => s.toasts);
+  const dismissToast = useNotificationStore((s) => s.dismissToast);
   return (
     <div className="pointer-events-none fixed inset-x-3 top-3 z-[60] flex flex-col gap-2 sm:inset-x-auto sm:right-4 sm:top-4 sm:max-w-sm">
-      {items.map((n) => (
+      {toasts.map((n) => (
         <div
           key={n.id}
           className={cn(
@@ -27,7 +28,7 @@ export function Notifications() {
           </div>
           <button
             type="button"
-            onClick={() => remove(n.id)}
+            onClick={() => dismissToast(n.id)}
             className="touch-target shrink-0 opacity-60 hover:opacity-100"
           >
             <X className="h-4 w-4" />

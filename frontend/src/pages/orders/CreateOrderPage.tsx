@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Minus, Plus, Search, ArrowLeft } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -20,7 +20,30 @@ import { cartQtyForProduct, reportStockShortage, type StockFailure } from '@/lib
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { isTableAvailableForNewOrder } from '@/lib/tableOrder';
+import { useScheduledBookingsByTable } from '@/hooks/useTableBookings';
+import { getTableBookingWarning } from '@/lib/tableBookingNotify';
 import { t, tableStatus } from '@/i18n';
+
+const BOOKING_WARN_STORAGE = 'table-booking-warn-shown';
+
+function loadBookingWarnShown(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(BOOKING_WARN_STORAGE);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveBookingWarnShown(keys: Set<string>) {
+  try {
+    sessionStorage.setItem(BOOKING_WARN_STORAGE, JSON.stringify([...keys]));
+  } catch {
+    /* ignore */
+  }
+}
 
 interface CartLine {
   product_id: string;
@@ -55,6 +78,8 @@ export function CreateOrderPage() {
   const { data: products, isLoading: loadingProducts } = useProducts(search || undefined, true);
   const { data: tables, isLoading: loadingTables } = useTables();
   const { data: openOrderTableIds } = useTableIdsWithOpenOrders();
+  const { data: bookingsByTable } = useScheduledBookingsByTable();
+  const bookingWarnShownRef = useRef<Set<string>>(loadBookingWarnShown());
   const { data: waiters, isLoading: loadingWaiters } = useWaiters();
   const { data: openKassa } = useOpenCashRegisterSession();
   const { data: myStaffId } = useMyStaffId();
@@ -94,6 +119,18 @@ export function CreateOrderPage() {
       });
     }
   }, [isCashierUser, searchParams, tables, openOrderTableIds, notify]);
+
+  useEffect(() => {
+    if (isCashierUser || !tableId || !bookingsByTable) return;
+    const booking = bookingsByTable.get(tableId);
+    if (!booking) return;
+    const key = `${tableId}:${booking.id}`;
+    if (bookingWarnShownRef.current.has(key)) return;
+    bookingWarnShownRef.current.add(key);
+    saveBookingWarnShown(bookingWarnShownRef.current);
+    const warn = getTableBookingWarning(booking);
+    notify({ type: 'warning', title: warn.title, message: warn.message });
+  }, [isCashierUser, tableId, bookingsByTable, notify]);
 
   const activeWaiters = useMemo(
     () => (waiters ?? []).filter((w) => w.status === 'ACTIVE'),

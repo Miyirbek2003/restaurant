@@ -1,4 +1,5 @@
-import { Moon, Sun, LogOut, Bell, Menu } from 'lucide-react';
+import { Moon, Sun, LogOut, Menu } from 'lucide-react';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeStore } from '@/stores/themeStore';
 import { useMobileNav } from '@/contexts/MobileNavContext';
@@ -35,13 +36,7 @@ export function Topbar() {
         <p className="truncate text-xs text-slate-500">{roleLabel(profile?.role)}</p>
       </div>
       <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
-        <button
-          type="button"
-          className="touch-target rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-          aria-label={t('common.notifications')}
-        >
-          <Bell className="h-5 w-5" />
-        </button>
+        <NotificationBell />
         <button
           type="button"
           onClick={toggle}

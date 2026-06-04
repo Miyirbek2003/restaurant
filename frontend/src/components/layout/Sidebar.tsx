@@ -5,6 +5,7 @@ import {
   UtensilsCrossed,
   Grid3X3,
   ShoppingCart,
+  CalendarDays,
   Package,
   Truck,
   Receipt,
@@ -60,6 +61,7 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/tables', labelKey: 'nav.tables', icon: Grid3X3, roles: ['MANAGER', 'WAITER', 'CASHIER'] },
       { to: '/orders', labelKey: 'nav.orders', icon: ShoppingCart, roles: ['MANAGER', 'WAITER', 'CASHIER'] },
+      { to: '/bookings', labelKey: 'nav.bookings', icon: CalendarDays, roles: ['MANAGER', 'WAITER', 'CASHIER'] },
     ],
   },
   {

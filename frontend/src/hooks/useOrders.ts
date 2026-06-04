@@ -357,6 +357,19 @@ export function useUpdateOrderStatus() {
   });
 }
 
+/** Cancel order within 2 minutes of creation (restores stock if already deducted). */
+export function useDiscardOrder() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      const { error } = await supabase.rpc('discard_order', { p_order_id: orderId });
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateOrderQueries(qc),
+  });
+}
+
 export function useSendToKitchen() {
   const qc = useQueryClient();
   const restaurantId = useRestaurantId();

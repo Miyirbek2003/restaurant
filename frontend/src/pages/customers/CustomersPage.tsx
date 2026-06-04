@@ -15,13 +15,12 @@ type Customer = {
   id: string;
   name: string;
   phone: string | null;
-  email: string | null;
   birthday: string | null;
   notes: string | null;
   loyalty_points: number;
 };
 
-const empty = { name: '', phone: '', email: '', birthday: '', notes: '', loyalty_points: '0' };
+const empty = { name: '', phone: '', birthday: '', notes: '', loyalty_points: '0' };
 
 export function CustomersPage() {
   const { data = [], isLoading } = useResourceList<Customer>('customers');
@@ -45,7 +44,6 @@ export function CustomersPage() {
     setForm({
       name: row.name,
       phone: row.phone ?? '',
-      email: row.email ?? '',
       birthday: row.birthday ?? '',
       notes: row.notes ?? '',
       loyalty_points: String(row.loyalty_points),
@@ -58,7 +56,6 @@ export function CustomersPage() {
     const body = {
       name: form.name,
       phone: form.phone || null,
-      email: form.email || null,
       birthday: form.birthday || null,
       notes: form.notes || null,
       loyalty_points: parseInt(form.loyalty_points, 10) || 0,
@@ -96,9 +93,7 @@ export function CustomersPage() {
             <Card key={row.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold">{row.name}</p>
-                <p className="text-sm text-slate-500">
-                  {[row.phone, row.email].filter(Boolean).join(' · ') || '—'}
-                </p>
+                <p className="text-sm text-slate-500">{row.phone || '—'}</p>
                 <p className="text-sm text-primary-600">
                   {row.loyalty_points} {t('customers.loyaltyPoints')}
                 </p>
@@ -131,7 +126,6 @@ export function CustomersPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input label={t('common.name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <Input label={t('common.phone')} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          <Input label={t('common.email')} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label={t('customers.birthday')} type="date" value={form.birthday} onChange={(e) => setForm({ ...form, birthday: e.target.value })} />
           <Input
             label={t('customers.loyaltyPoints')}

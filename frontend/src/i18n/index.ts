@@ -31,6 +31,10 @@ export function tableStatus(status: string): string {
   return getPath(ru.tableStatus as unknown as Leaf, status) ?? status;
 }
 
+export function bookingStatus(status: string): string {
+  return getPath(ru.bookingStatus as unknown as Leaf, status) ?? status;
+}
+
 export function roleLabel(role: string | undefined): string {
   if (!role) return '';
   return getPath(ru.roles as unknown as Leaf, role) ?? role.replace('_', ' ');

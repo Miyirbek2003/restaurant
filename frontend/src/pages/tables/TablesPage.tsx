@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { Plus } from 'lucide-react';
+import { BookingFormModal } from '@/components/bookings/BookingFormModal';
+import { TableCardMenu } from '@/components/tables/TableCardMenu';
 import { FloorFilterBar } from '@/components/tables/FloorFilterBar';
 import { FloorsManageModal } from '@/components/tables/FloorsManageModal';
 import { Card } from '@/components/ui/Card';
@@ -12,6 +15,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { RestaurantRequired } from '@/components/RestaurantRequired';
 import {
+  useTables,
   useTablesWithWaiters,
   useCreateTable,
   useUpdateTable,
@@ -19,6 +23,9 @@ import {
   type TableStatus,
   type TableChargeType,
 } from '@/hooks/useTables';
+import { useScheduledBookingsByTable } from '@/hooks/useTableBookings';
+import { isBookingArrivalDue } from '@/lib/bookingArrival';
+import { useLiveSecond } from '@/hooks/useLiveSecond';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRestaurantId } from '@/contexts/AuthContext';
 import { canCreateOrders, isCashier, isManager } from '@/lib/roles';
@@ -53,6 +60,12 @@ export function TablesPage() {
   );
   const cashierCreateBlocked = Boolean(profile?.role === 'CASHIER' && openKassa && !isKassaOwner);
   const { data: tables = [], isFetching, isError, error, refetch } = useTablesWithWaiters();
+  const { data: allTables = [] } = useTables();
+  const { data: bookingsByTable } = useScheduledBookingsByTable();
+  const hasDueBookings = Boolean(
+    bookingsByTable && [...bookingsByTable.values()].some((b) => isBookingArrivalDue(b.scheduled_at)),
+  );
+  useLiveSecond(hasDueBookings);
   const { data: configuredFloors = [] } = useRestaurantFloors();
   const createTable = useCreateTable();
   const updateTable = useUpdateTable();
@@ -75,6 +88,8 @@ export function TablesPage() {
   const [chargeType, setChargeType] = useState<TableChargeType>('NONE');
   const [chargeAmount, setChargeAmount] = useState('');
   const [viewOrderId, setViewOrderId] = useState<string | null>(null);
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [bookingTableId, setBookingTableId] = useState<string | undefined>();
 
   const chargeTypeOptions = [
     { value: 'NONE', label: t('tables.chargeNone') },
@@ -227,12 +242,39 @@ export function TablesPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredTables.map((table) => (
-            <Card key={table.id} className="flex flex-col p-4">
+            <Card key={table.id} className="@container flex flex-col p-4">
               <div className="mb-3 flex items-start justify-between gap-2">
-                <h3 className="text-lg font-semibold">{table.name}</h3>
-                <Badge color={statusColor[table.status] ?? 'gray'} size="sm">
-                  {tableStatus(table.status)}
-                </Badge>
+                <h3 className="min-w-0 flex-1 text-lg font-semibold leading-tight">{table.name}</h3>
+                <div className="flex shrink-0 items-start gap-0.5">
+                  <Badge color={statusColor[table.status] ?? 'gray'} size="sm">
+                    {tableStatus(table.status)}
+                  </Badge>
+                  <TableCardMenu
+                    canBook={Boolean(
+                      canOrder &&
+                        !table.openOrderId &&
+                        !bookingsByTable?.has(table.id),
+                    )}
+                    canManage={Boolean(canManage)}
+                    onBook={() => {
+                      setBookingTableId(table.id);
+                      setBookingModalOpen(true);
+                    }}
+                    onEdit={() => openEdit(table)}
+                    onDelete={() => {
+                      if (window.confirm(t('tables.deleteConfirm', { name: table.name }))) {
+                        deleteTable.mutate(table.id, {
+                          onError: (err) =>
+                            notify({
+                              type: 'error',
+                              title: t('tables.deleteFailed'),
+                              message: getErrorMessage(err),
+                            }),
+                        });
+                      }
+                    }}
+                  />
+                </div>
               </div>
               <dl className="flex-1 space-y-2 text-sm">
                 <div className="flex justify-between gap-4">
@@ -249,6 +291,42 @@ export function TablesPage() {
                     {table.waiterName ?? '—'}
                   </dd>
                 </div>
+                {bookingsByTable?.get(table.id) && (() => {
+                  const booking = bookingsByTable.get(table.id)!;
+                  const due = isBookingArrivalDue(booking.scheduled_at);
+                  return (
+                    <div
+                      className={
+                        due
+                          ? 'rounded-lg border border-amber-400 bg-amber-50 px-2 py-1.5 text-xs dark:border-amber-600 dark:bg-amber-950/50'
+                          : 'rounded-lg bg-blue-50 px-2 py-1.5 text-xs dark:bg-blue-950/40'
+                      }
+                    >
+                      {due && (
+                        <p className="mb-1 font-semibold text-amber-900 dark:text-amber-100">
+                          {t('bookings.callClientNow')}
+                        </p>
+                      )}
+                      <p className={due ? 'font-medium text-amber-900 dark:text-amber-200' : 'font-medium text-blue-800 dark:text-blue-200'}>
+                        {t('bookings.booker')}: {booking.customerName}
+                      </p>
+                      <p className={due ? 'text-amber-800/90 dark:text-amber-300/90' : 'text-blue-700/80 dark:text-blue-300/80'}>
+                        {t('bookings.scheduledFor', {
+                          time: format(new Date(booking.scheduled_at), 'dd.MM HH:mm'),
+                        })}
+                      </p>
+                      {due && booking.customerPhone && (
+                        <a
+                          href={`tel:${booking.customerPhone.replace(/\s/g, '')}`}
+                          className="mt-1 inline-block font-medium text-amber-900 underline dark:text-amber-100"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {t('bookings.callClient')}: {booking.customerPhone}
+                        </a>
+                      )}
+                    </div>
+                  );
+                })()}
                 {table.charge_type && table.charge_type !== 'NONE' && (
                   <div className="flex justify-between gap-4">
                     <dt className="text-slate-500">{t('tables.chargeLabel')}</dt>
@@ -260,54 +338,29 @@ export function TablesPage() {
                   </div>
                 )}
               </dl>
-              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
-                {canOrder && table.status === 'FREE' && (
-                  <Button
-                    size="sm"
-                    className="flex-1"
-                    disabled={cashierCreateBlocked}
-                    onClick={() => goNewOrder(table.id)}
-                  >
-                    {t('tables.newOrder')}
-                  </Button>
-                )}
-                {canOrder && table.status === 'OCCUPIED' && table.openOrderId && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="flex-1"
-                    onClick={() => setViewOrderId(table.openOrderId)}
-                  >
-                    {t('tables.viewOrder')}
-                  </Button>
-                )}
-                {canManage && (
-                  <>
-                    <Button size="sm" variant="ghost" onClick={() => openEdit(table)} title={t('tables.editTable')}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+              {canOrder && (table.openOrderId || table.status !== 'CLEANING') && (
+                <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
+                  {table.openOrderId ? (
                     <Button
                       size="sm"
-                      variant="ghost"
-                      title={t('tables.deleteTable')}
-                      onClick={() => {
-                        if (window.confirm(t('tables.deleteConfirm', { name: table.name }))) {
-                          deleteTable.mutate(table.id, {
-                            onError: (err) =>
-                              notify({
-                                type: 'error',
-                                title: t('tables.deleteFailed'),
-                                message: getErrorMessage(err),
-                              }),
-                          });
-                        }
-                      }}
+                      variant="secondary"
+                      className="w-full justify-center whitespace-nowrap"
+                      onClick={() => setViewOrderId(table.openOrderId)}
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                      {t('tables.viewOrder')}
                     </Button>
-                  </>
-                )}
-              </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="w-full justify-center whitespace-nowrap"
+                      disabled={cashierCreateBlocked}
+                      onClick={() => goNewOrder(table.id)}
+                    >
+                      {t('tables.newOrder')}
+                    </Button>
+                  )}
+                </div>
+              )}
             </Card>
           ))}
         </div>
@@ -318,6 +371,15 @@ export function TablesPage() {
         open={viewOrderId !== null}
         onClose={() => setViewOrderId(null)}
       />
+
+      {canOrder && (
+        <BookingFormModal
+          open={bookingModalOpen}
+          onClose={() => setBookingModalOpen(false)}
+          tables={allTables}
+          initialTableId={bookingTableId}
+        />
+      )}
 
       {canManage && (
         <FloorsManageModal

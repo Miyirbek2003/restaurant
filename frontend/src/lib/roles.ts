@@ -26,6 +26,7 @@ export const MANAGER_PATH_PREFIXES = [
   '/kassa',
   '/product-profit',
   '/settings',
+  '/bookings',
 ] as const;
 
 export const CASHIER_PATH_PREFIXES = ['/kassa', '/orders', '/tables'] as const;
@@ -40,7 +41,7 @@ export function getHomeForRole(role: UserRole | undefined): string {
 const ROUTE_ACCESS: Record<UserRole, string[]> = {
   SUPER_ADMIN: ['/admin', '/dashboard'],
   MANAGER: [...MANAGER_PATH_PREFIXES],
-  WAITER: ['/tables', '/orders', '/menu'],
+  WAITER: ['/tables', '/orders', '/menu', '/bookings'],
   CASHIER: [...MANAGER_PATH_PREFIXES],
   KITCHEN: [],
 };

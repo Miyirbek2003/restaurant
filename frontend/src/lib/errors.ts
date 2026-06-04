@@ -43,6 +43,12 @@ export function getErrorMessage(error: unknown): string {
   if (raw === 'TABLE_OCCUPIED') {
     return t('errors.tableOccupied');
   }
+  if (raw === 'ORDER_DISCARD_WINDOW_EXPIRED') {
+    return t('errors.orderDiscardWindowExpired');
+  }
+  if (raw === 'ORDER_CANNOT_DISCARD') {
+    return t('errors.orderCannotDiscard');
+  }
   if (raw === 'CASH_REGISTER_ALREADY_OPEN') {
     return t('errors.cashRegisterAlreadyOpen');
   }
