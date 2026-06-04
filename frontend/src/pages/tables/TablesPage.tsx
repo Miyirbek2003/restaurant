@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { FloorFilterBar } from '@/components/tables/FloorFilterBar';
+import { FloorsManageModal } from '@/components/tables/FloorsManageModal';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -23,7 +25,7 @@ import { canCreateOrders, isCashier, isManager } from '@/lib/roles';
 import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
 import { useMyStaffId } from '@/hooks/useMyStaff';
 import { FLOOR_FILTER_ALL, floorLabel, mergeFloors, type FloorFilter } from '@/lib/floors';
-import { useRestaurantFloors, useAddRestaurantFloor } from '@/hooks/useFloors';
+import { useRestaurantFloors } from '@/hooks/useFloors';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { OrderDetailModal } from '@/components/orders/OrderDetailModal';
@@ -52,7 +54,6 @@ export function TablesPage() {
   const cashierCreateBlocked = Boolean(profile?.role === 'CASHIER' && openKassa && !isKassaOwner);
   const { data: tables = [], isFetching, isError, error, refetch } = useTablesWithWaiters();
   const { data: configuredFloors = [] } = useRestaurantFloors();
-  const addFloor = useAddRestaurantFloor();
   const createTable = useCreateTable();
   const updateTable = useUpdateTable();
   const deleteTable = useDeleteTable();
@@ -65,8 +66,7 @@ export function TablesPage() {
 
   const [floorFilter, setFloorFilter] = useState<FloorFilter>(FLOOR_FILTER_ALL);
   const [modal, setModal] = useState<'add' | 'edit' | null>(null);
-  const [floorModalOpen, setFloorModalOpen] = useState(false);
-  const [newFloorName, setNewFloorName] = useState('');
+  const [floorsManageOpen, setFloorsManageOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [capacity, setCapacity] = useState('4');
@@ -208,39 +208,14 @@ export function TablesPage() {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant={floorFilter === FLOOR_FILTER_ALL ? 'primary' : 'secondary'}
-          onClick={() => setFloorFilter(FLOOR_FILTER_ALL)}
-        >
-          {t('tables.allFloors')} ({floorCounts[FLOOR_FILTER_ALL]})
-        </Button>
-        {floors.map((f) => (
-          <Button
-            key={f}
-            size="sm"
-            variant={floorFilter === f ? 'primary' : 'secondary'}
-            onClick={() => setFloorFilter(f)}
-          >
-            {f} ({floorCounts[f] ?? 0})
-          </Button>
-        ))}
-        {canManage && (
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => {
-              setNewFloorName('');
-              setFloorModalOpen(true);
-            }}
-            title={t('tables.addFloorTitle')}
-            aria-label={t('tables.addFloorTitle')}
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
+      <FloorFilterBar
+        floors={floors}
+        floorFilter={floorFilter}
+        floorCounts={floorCounts}
+        canManage={Boolean(canManage)}
+        onFilterChange={setFloorFilter}
+        onManageFloors={() => setFloorsManageOpen(true)}
+      />
 
       {tables.length === 0 ? (
         <p className="text-sm text-slate-500">
@@ -345,40 +320,15 @@ export function TablesPage() {
       />
 
       {canManage && (
-        <Modal open={floorModalOpen} onClose={() => setFloorModalOpen(false)} title={t('tables.addFloorTitle')}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              addFloor.mutate(newFloorName, {
-                onSuccess: (list) => {
-                  notify({ type: 'success', title: t('tables.floorAdded') });
-                  setFloorModalOpen(false);
-                  setNewFloorName('');
-                  setFloorFilter(list[list.length - 1] ?? FLOOR_FILTER_ALL);
-                },
-                onError: (err) =>
-                  notify({ type: 'error', title: t('tables.floorAddFailed'), message: getErrorMessage(err) }),
-              });
-            }}
-            className="space-y-4"
-          >
-            <Input
-              label={t('tables.floorName')}
-              value={newFloorName}
-              onChange={(e) => setNewFloorName(e.target.value)}
-              placeholder={t('tables.floorPlaceholder')}
-              required
-            />
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setFloorModalOpen(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button type="submit" loading={addFloor.isPending}>
-                {t('common.add')}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+        <FloorsManageModal
+          open={floorsManageOpen}
+          onClose={() => setFloorsManageOpen(false)}
+          floors={floors}
+          floorCounts={floorCounts}
+          onRenamed={(oldName, newName) => {
+            if (floorFilter === oldName) setFloorFilter(newName);
+          }}
+        />
       )}
 
       {canManage && (

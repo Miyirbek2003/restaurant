@@ -79,6 +79,72 @@ export function useAddRestaurantFloor() {
 
       return next;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['restaurant-floors'] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['restaurant-floors'] });
+    },
+  });
+}
+
+export function useRenameRestaurantFloor() {
+  const restaurantId = useRestaurantId();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ oldName, newName }: { oldName: string; newName: string }) => {
+      const trimmed = newName.trim();
+      if (!trimmed) throw new Error('Floor name is required');
+      if (!restaurantId) throw new Error('No restaurant assigned');
+      const { data: existing, error: readErr } = await supabase
+        .from('restaurant_settings')
+        .select('id, floors')
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle();
+
+      if (readErr && readErr.code !== 'PGRST116') throw readErr;
+
+      if (oldName.trim().toLowerCase() === trimmed.toLowerCase()) {
+        return parseFloors(existing?.floors);
+      }
+
+      const current = parseFloors(existing?.floors);
+      if (current.some((f) => f !== oldName && f.toLowerCase() === trimmed.toLowerCase())) {
+        throw new Error('This floor already exists');
+      }
+
+      let next: string[];
+      if (current.includes(oldName)) {
+        next = current.map((f) => (f === oldName ? trimmed : f));
+      } else {
+        next = [...current, trimmed];
+      }
+
+      if (existing?.id) {
+        const { error } = await supabase
+          .from('restaurant_settings')
+          .update({ floors: next })
+          .eq('restaurant_id', restaurantId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('restaurant_settings').insert({
+          restaurant_id: restaurantId,
+          floors: next,
+        });
+        if (error) throw error;
+      }
+
+      const { error: tablesErr } = await supabase
+        .from('tables')
+        .update({ floor: trimmed })
+        .eq('restaurant_id', restaurantId)
+        .eq('floor', oldName);
+      if (tablesErr) throw tablesErr;
+
+      return next;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['restaurant-floors'] });
+      void qc.invalidateQueries({ queryKey: ['tables'] });
+      void qc.invalidateQueries({ queryKey: ['tables-with-waiters'] });
+    },
   });
 }
