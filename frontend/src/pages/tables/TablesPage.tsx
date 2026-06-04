@@ -22,7 +22,7 @@ import { useRestaurantId } from '@/contexts/AuthContext';
 import { canCreateOrders, isCashier, isManager } from '@/lib/roles';
 import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
 import { useMyStaffId } from '@/hooks/useMyStaff';
-import { FLOOR_FILTER_ALL, DEFAULT_FLOORS, floorLabel, mergeFloors, type FloorFilter } from '@/lib/floors';
+import { FLOOR_FILTER_ALL, floorLabel, mergeFloors, type FloorFilter } from '@/lib/floors';
 import { useRestaurantFloors, useAddRestaurantFloor } from '@/hooks/useFloors';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
@@ -51,7 +51,7 @@ export function TablesPage() {
   );
   const cashierCreateBlocked = Boolean(profile?.role === 'CASHIER' && openKassa && !isKassaOwner);
   const { data: tables = [], isFetching, isError, error, refetch } = useTablesWithWaiters();
-  const { data: configuredFloors = [...DEFAULT_FLOORS] } = useRestaurantFloors();
+  const { data: configuredFloors = [] } = useRestaurantFloors();
   const addFloor = useAddRestaurantFloor();
   const createTable = useCreateTable();
   const updateTable = useUpdateTable();
@@ -70,7 +70,7 @@ export function TablesPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [capacity, setCapacity] = useState('4');
-  const [floor, setFloor] = useState<string>(DEFAULT_FLOORS[0]);
+  const [floor, setFloor] = useState('');
   const [status, setStatus] = useState<TableStatus>('FREE');
   const [chargeType, setChargeType] = useState<TableChargeType>('NONE');
   const [chargeAmount, setChargeAmount] = useState('');
@@ -112,7 +112,7 @@ export function TablesPage() {
   const openAdd = () => {
     setName('');
     setCapacity('4');
-    setFloor(floors[0] ?? DEFAULT_FLOORS[0]);
+    setFloor(floors[0] ?? '');
     setStatus('FREE');
     setChargeType('NONE');
     setChargeAmount('');
@@ -132,7 +132,7 @@ export function TablesPage() {
     setEditId(t.id);
     setName(t.name);
     setCapacity(String(t.capacity));
-    setFloor(t.floor && floors.includes(t.floor) ? t.floor : floors[0] ?? DEFAULT_FLOORS[0]);
+    setFloor(t.floor && floors.includes(t.floor) ? t.floor : floors[0] ?? t.floor ?? '');
     setStatus(t.status as TableStatus);
     setChargeType((t.charge_type as TableChargeType) || 'NONE');
     setChargeAmount(t.charge_amount ? String(t.charge_amount) : '');
@@ -397,7 +397,21 @@ export function TablesPage() {
               onChange={(e) => setCapacity(e.target.value)}
               required
             />
-            <Select label={t('tables.floor')} value={floor} onChange={(e) => setFloor(e.target.value)} options={floorOptions} />
+            {floorOptions.length > 0 ? (
+              <Select
+                label={t('tables.floor')}
+                value={floor}
+                onChange={(e) => setFloor(e.target.value)}
+                options={floorOptions}
+              />
+            ) : (
+              <Input
+                label={t('tables.floor')}
+                value={floor}
+                onChange={(e) => setFloor(e.target.value)}
+                placeholder={t('tables.floorPlaceholder')}
+              />
+            )}
             <Select
               label={t('tables.chargeType')}
               value={chargeType}

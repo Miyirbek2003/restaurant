@@ -1,13 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useRestaurantId } from '@/contexts/AuthContext';
-import { DEFAULT_FLOORS } from '@/lib/floors';
-
 function parseFloors(raw: unknown): string[] {
   if (Array.isArray(raw)) {
     return raw.filter((f): f is string => typeof f === 'string' && f.trim().length > 0);
   }
-  return [...DEFAULT_FLOORS];
+  return [];
 }
 
 export function useRestaurantFloors() {
@@ -25,13 +23,12 @@ export function useRestaurantFloors() {
 
       if (error) {
         if (error.code === '42703' || error.message.includes('floors')) {
-          return [...DEFAULT_FLOORS];
+          return [];
         }
         throw error;
       }
 
-      const floors = parseFloors(data?.floors);
-      return floors.length > 0 ? floors : [...DEFAULT_FLOORS];
+      return parseFloors(data?.floors);
     },
   });
 }

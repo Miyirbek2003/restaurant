@@ -1,5 +1,3 @@
-export const DEFAULT_FLOORS = ['Hall', 'Outdoor'] as const;
-
 export const FLOOR_FILTER_ALL = 'ALL' as const;
 
 export type FloorFilter = typeof FLOOR_FILTER_ALL | string;
