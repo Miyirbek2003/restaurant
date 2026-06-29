@@ -1,6 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useRestaurantId } from '@/contexts/AuthContext';
+import { roundWeightKg } from '@/lib/weight';
+
+function inventoryQtyFromProductStock(stockQuantity: number, saleUnit?: string): number {
+  if (saleUnit === 'KG') return Math.max(0, roundWeightKg(stockQuantity));
+  return Math.max(0, Math.floor(stockQuantity));
+}
 
 export function useProducts(search?: string, activeOnly = false) {
   const restaurantId = useRestaurantId();
@@ -59,6 +65,7 @@ export function useCreateProduct() {
       is_active?: boolean;
       image_url?: string;
       stock_quantity?: number;
+      sale_unit?: 'PIECE' | 'KG';
     }) => {
       if (!restaurantId) {
         throw new Error('No restaurant assigned to your account. Link restaurant_id in profiles table.');
@@ -100,13 +107,25 @@ export function useUpdateProduct() {
       description?: string;
       image_url?: string;
       stock_quantity?: number;
+      sale_unit?: 'PIECE' | 'KG';
     }) => {
       const { data, error } = await supabase.from('products').update(body).eq('id', id).select().single();
       if (error) throw error;
+
+      if (body.stock_quantity !== undefined) {
+        const invQty = inventoryQtyFromProductStock(body.stock_quantity, data.sale_unit);
+        const { error: invErr } = await supabase
+          .from('inventory_items')
+          .update({ quantity: invQty })
+          .eq('product_id', id);
+        if (invErr) throw invErr;
+      }
+
       return data;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['products'] });
+      void qc.invalidateQueries({ queryKey: ['inventory_items'] });
     },
   });
 }

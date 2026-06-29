@@ -57,7 +57,7 @@ const orderSelect = `
   *,
   tables(name, charge_type, charge_amount),
   staff:restaurant_staff(name, role),
-  order_items(*, products(name))
+  order_items(*, products(name, sale_unit))
 `;
 
 export function useOrders(status?: OrderStatus) {

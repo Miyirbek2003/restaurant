@@ -1,11 +1,14 @@
 import { format } from 'date-fns';
 import type { BillLine, OrderBill } from '@/lib/orderBilling';
 import type { PaymentLine } from '@/lib/payments';
+import { PLACEHOLDER_MENU_IMAGE, resolveImageUrl } from '@/lib/images';
+import { formatSaleQuantity } from '@/lib/weight';
 import { formatCurrency } from '@/lib/utils';
 import { t } from '@/i18n';
 
 export type OrderReceiptData = {
   restaurantName: string;
+  logoUrl?: string | null;
   address?: string | null;
   phone?: string | null;
   openingTime?: string | null;
@@ -26,17 +29,9 @@ function escapeHtml(value: string): string {
     .replaceAll('"', '&quot;');
 }
 
-/** One printed row per unit — no combined "2×" lines on the receipt. */
-function expandReceiptItemRows(lines: BillLine[]): { name: string; price: number }[] {
-  const rows: { name: string; price: number }[] = [];
-  for (const line of lines) {
-    const unitPrice = line.unitPrice;
-    const count = Math.max(1, Math.floor(line.quantity));
-    for (let i = 0; i < count; i++) {
-      rows.push({ name: line.name, price: unitPrice });
-    }
-  }
-  return rows;
+function formatReceiptItemLabel(line: BillLine): string {
+  const qtyLabel = formatSaleQuantity(line.quantity, line.saleUnit);
+  return `${qtyLabel} × ${line.name}`;
 }
 
 function receiptStyles(): string {
@@ -61,6 +56,13 @@ function receiptStyles(): string {
       font-size: 28px;
       letter-spacing: 0.15em;
       margin-bottom: 8px;
+    }
+    .logo-img {
+      display: block;
+      max-width: 120px;
+      max-height: 52px;
+      margin: 0 auto 8px;
+      object-fit: contain;
     }
     .brand {
       font-size: 16px;
@@ -148,12 +150,21 @@ export function buildOrderReceiptHtml(data: OrderReceiptData): string {
     data.phone?.trim() ? `${t('receipt.phone')}: ${data.phone.trim()}` : null,
   ].filter(Boolean);
 
-  const itemsHtml = expandReceiptItemRows(data.bill.lines)
+  const logoHtml = data.logoUrl?.trim()
+    ? `<img class="logo-img" src="${escapeHtml(resolveImageUrl(data.logoUrl))}" alt="" />`
+    : `<img class="logo-img" src="${escapeHtml(PLACEHOLDER_MENU_IMAGE)}" alt="" />`;
+
+  const itemsHtml = data.bill.lines
     .map(
-      (row) =>
-        `<div class="item"><span class="name">${escapeHtml(row.name)}</span><span class="price">${escapeHtml(formatCurrency(row.price))}</span></div>`,
+      (line) =>
+        `<div class="item"><span class="name">${escapeHtml(formatReceiptItemLabel(line))}</span><span class="price">${escapeHtml(formatCurrency(line.lineTotal))}</span></div>`,
     )
     .join('');
+
+  const serviceFeeHtml =
+    data.bill.serviceFee > 0.005
+      ? `<div class="row"><span>${escapeHtml(t('receipt.serviceFee', { n: servicePct }))}</span><span>${escapeHtml(formatCurrency(data.bill.serviceFee))}</span></div>`
+      : '';
 
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -164,7 +175,7 @@ export function buildOrderReceiptHtml(data: OrderReceiptData): string {
 </head>
 <body>
   <div class="receipt">
-    <div class="center logo">🍴</div>
+    <div class="center">${logoHtml}</div>
     <div class="center brand">${escapeHtml(data.restaurantName)}</div>
     <div class="center meta">
       ${contactLines.map((line) => `<div>${escapeHtml(line!)}</div>`).join('')}
@@ -189,7 +200,7 @@ export function buildOrderReceiptHtml(data: OrderReceiptData): string {
 
     <div class="row"><span>${escapeHtml(t('receipt.subtotal'))}</span><span>${escapeHtml(formatCurrency(data.bill.mealSubtotal))}</span></div>
     ${data.bill.tableCharge > 0 ? `<div class="row"><span>${escapeHtml(t('receipt.tableCharge'))}</span><span>${escapeHtml(formatCurrency(data.bill.tableCharge))}</span></div>` : ''}
-    <div class="row"><span>${escapeHtml(t('receipt.serviceFee', { n: servicePct }))}</span><span>${escapeHtml(formatCurrency(data.bill.serviceFee))}</span></div>
+    ${serviceFeeHtml}
     <div class="row total-row"><span>${escapeHtml(t('receipt.total'))}</span><span>${escapeHtml(formatCurrency(data.bill.grandTotal))}</span></div>
 
     <div class="center footer">

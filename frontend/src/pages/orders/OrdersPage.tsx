@@ -7,7 +7,6 @@ import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { PayOrderModal } from '@/components/orders/PayOrderModal';
-import { OrderDetailModal } from '@/components/orders/OrderDetailModal';
 import { useOpenCashRegisterSession } from '@/hooks/useCashRegister';
 import { useOrders, useSendToKitchen, useCloseOrder, useUpdateOrderStatus, useDiscardOrder } from '@/hooks/useOrders';
 import { useLiveSecond } from '@/hooks/useLiveSecond';
@@ -125,7 +124,6 @@ export function OrdersPage() {
     setFilters({ search: '', dateFrom: range.from, dateTo: range.to });
   };
   const [payOrder, setPayOrder] = useState<OrderRow | null>(null);
-  const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
   const canUpdateItems = canPlaceOrders(profile?.role);
   const canPay = canOperateCashRegister(profile?.role);
   const isKassaOwner = Boolean(
@@ -405,7 +403,7 @@ export function OrdersPage() {
                     </Button>
                   )}
                   {canUpdateItems && canEditOrderItems(order.status) && (
-                    <Button size="sm" variant="secondary" onClick={() => setDetailOrderId(order.id)}>
+                    <Button size="sm" variant="secondary" onClick={() => navigate(`/orders/${order.id}/edit`)}>
                       {t('orders.updateItems')}
                     </Button>
                   )}
@@ -439,12 +437,6 @@ export function OrdersPage() {
         </div>
       )}
 
-      <OrderDetailModal
-        orderId={detailOrderId}
-        open={detailOrderId !== null}
-        onClose={() => setDetailOrderId(null)}
-      />
-
       {payOrder && (
         <PayOrderModal
           open
@@ -456,12 +448,13 @@ export function OrdersPage() {
           subtotal={Number(payOrder.subtotal)}
           loading={closeOrder.isPending}
           onConfirm={confirmPay}
-          onPrintCheck={() => {
+          onPrintCheck={(bill) => {
             if (!payOrder) return;
             printCheckForOrder(
               payOrder,
               payOrder.tables?.name ?? t('common.takeaway'),
               restaurantFromProfile(profile?.restaurants),
+              bill,
             );
           }}
         />

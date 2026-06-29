@@ -40,6 +40,7 @@ export type BillLine = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  saleUnit: BillSaleUnit;
 };
 
 export type OrderBill = {
@@ -55,8 +56,10 @@ type OrderItemRow = OrderItemNameSource & {
   id: string;
   quantity: number;
   unit_price: number;
-  products?: { name: string } | null;
+  products?: { name: string; sale_unit?: string | null } | null;
 };
+
+export type BillSaleUnit = 'PIECE' | 'KG';
 
 export function buildOrderBill(
   items: OrderItemRow[],
@@ -68,12 +71,14 @@ export function buildOrderBill(
     const unitPrice = Number(item.unit_price);
     const quantity = item.quantity;
     const lineTotal = unitPrice * quantity;
+    const saleUnit: BillSaleUnit = item.products?.sale_unit === 'KG' ? 'KG' : 'PIECE';
     return {
       id: item.id,
       name: orderItemName(item, 'Item'),
       quantity,
       unitPrice,
       lineTotal,
+      saleUnit,
     };
   });
 

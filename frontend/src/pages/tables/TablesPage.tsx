@@ -35,7 +35,6 @@ import { FLOOR_FILTER_ALL, floorLabel, mergeFloors, type FloorFilter } from '@/l
 import { useRestaurantFloors } from '@/hooks/useFloors';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
-import { OrderDetailModal } from '@/components/orders/OrderDetailModal';
 import { t, tableStatus } from '@/i18n';
 
 const statusColor: Record<string, 'green' | 'yellow' | 'blue' | 'gray'> = {
@@ -87,7 +86,6 @@ export function TablesPage() {
   const [status, setStatus] = useState<TableStatus>('FREE');
   const [chargeType, setChargeType] = useState<TableChargeType>('NONE');
   const [chargeAmount, setChargeAmount] = useState('');
-  const [viewOrderId, setViewOrderId] = useState<string | null>(null);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [bookingTableId, setBookingTableId] = useState<string | undefined>();
 
@@ -345,7 +343,7 @@ export function TablesPage() {
                       size="sm"
                       variant="secondary"
                       className="w-full justify-center whitespace-nowrap"
-                      onClick={() => setViewOrderId(table.openOrderId)}
+                      onClick={() => navigate(`/orders/${table.openOrderId}/edit`)}
                     >
                       {t('tables.viewOrder')}
                     </Button>
@@ -365,12 +363,6 @@ export function TablesPage() {
           ))}
         </div>
       )}
-
-      <OrderDetailModal
-        orderId={viewOrderId}
-        open={viewOrderId !== null}
-        onClose={() => setViewOrderId(null)}
-      />
 
       {canOrder && (
         <BookingFormModal

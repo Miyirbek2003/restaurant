@@ -91,6 +91,7 @@ export interface Database {
           image_url: string | null;
           is_active: boolean;
           stock_quantity: number;
+          sale_unit?: 'PIECE' | 'KG';
           created_at: string;
           updated_at: string;
         };

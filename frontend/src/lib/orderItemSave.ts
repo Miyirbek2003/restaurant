@@ -48,11 +48,12 @@ export type DraftDisplayUnit = {
   isLastUnit: boolean;
 };
 
-/** One UI row per unit (no combined "2×" rows). */
+/** One UI row per unit (no combined "2×" rows). Fractional qty = single row. */
 export function expandDraftForDisplay(lines: DraftOrderLine[]): DraftDisplayUnit[] {
   const rows: DraftDisplayUnit[] = [];
   for (const line of sortDraftLines(lines)) {
-    const count = Math.max(1, line.quantity);
+    const fractional = Math.abs(line.quantity - Math.round(line.quantity)) > 0.0001;
+    const count = fractional ? 1 : Math.max(1, Math.round(line.quantity));
     for (let unitIndex = 0; unitIndex < count; unitIndex++) {
       rows.push({ line, unitIndex, isLastUnit: unitIndex === count - 1 });
     }

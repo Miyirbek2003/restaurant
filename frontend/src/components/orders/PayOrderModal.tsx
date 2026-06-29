@@ -19,12 +19,13 @@ import {
 } from '@/lib/payments';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { formatSaleQuantity } from '@/lib/weight';
 
 type OrderItem = {
   id: string;
   quantity: number;
   unit_price: number;
-  products?: { name: string } | null;
+  products?: { name: string; sale_unit?: string | null } | null;
 };
 
 type PayOrderModalProps = {
@@ -37,7 +38,7 @@ type PayOrderModalProps = {
   table?: TableChargeFields | null;
   loading?: boolean;
   onConfirm: (grandTotal: number, payments: PaymentLine[], bill: OrderBill) => void;
-  onPrintCheck?: () => void;
+  onPrintCheck?: (bill: OrderBill) => void;
 };
 
 function DottedRow({ label, value }: { label: string; value: string }) {
@@ -141,13 +142,21 @@ export function PayOrderModal({
       <p className="mb-4 text-sm text-slate-500">{tableName}</p>
 
       <div className="space-y-2">
-        {bill.lines.map((line) => (
-          <DottedRow
-            key={line.id}
-            label={`${line.quantity > 1 ? `${line.quantity}× ` : ''}${line.name}`}
-            value={formatCurrency(line.lineTotal)}
-          />
-        ))}
+        {bill.lines.map((line) => {
+          const qtyLabel =
+            line.saleUnit === 'KG'
+              ? formatSaleQuantity(line.quantity, 'KG')
+              : line.quantity > 1
+                ? `${line.quantity}×`
+                : '';
+          return (
+            <DottedRow
+              key={line.id}
+              label={qtyLabel ? `${qtyLabel} ${line.name}` : line.name}
+              value={formatCurrency(line.lineTotal)}
+            />
+          );
+        })}
       </div>
 
       <hr className="my-4 border-slate-200 dark:border-slate-700" />
@@ -309,7 +318,7 @@ export function PayOrderModal({
           {t('common.cancel')}
         </Button>
         {onPrintCheck && (
-          <Button type="button" variant="secondary" onClick={onPrintCheck} disabled={loading}>
+          <Button type="button" variant="secondary" onClick={() => onPrintCheck?.(bill)} disabled={loading}>
             {t('payModal.printCheck')}
           </Button>
         )}
