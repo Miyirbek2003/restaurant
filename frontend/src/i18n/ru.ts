@@ -108,7 +108,7 @@ export const ru = {
     staffJoin: 'Сотрудник?',
     joinInvite: 'Регистрация по коду',
     heroTitle: 'Ресторан POS SaaS',
-    heroSubtitle: 'Управление рестораном на Supabase Auth и базе данных.',
+    heroSubtitle: 'Управление рестораном: заказы, касса, склад и персонал.',
   },
   restaurantRequired: {
     title: 'Ресторан не назначен',
