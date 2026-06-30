@@ -170,7 +170,7 @@ export const ru = {
     created: 'Бронь создана',
     updated: 'Бронь обновлена',
     statusUpdated: 'Статус брони обновлён',
-    tableAlreadyBooked: 'На этот стол уже есть активная бронь',
+    tableAlreadyBooked: 'Стол уже забронирован на это время (бронь занимает 4 часа). Выберите другое время.',
     cancel: 'Отменить',
     cancelConfirm: 'Отменить бронь?',
     arrivedAndOrder: 'Пришёл — заказ',

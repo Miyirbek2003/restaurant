@@ -170,7 +170,11 @@ export function BookingFormModal({
       onClose();
     } catch (err) {
       const msg = getErrorMessage(err);
-      if (msg.includes('ux_table_bookings_scheduled_table') || msg.includes('duplicate key')) {
+      if (
+        msg.includes('TABLE_BOOKING_OVERLAP') ||
+        msg.includes('ux_table_bookings_scheduled_table') ||
+        msg.includes('duplicate key')
+      ) {
         notify({ type: 'error', title: t('bookings.tableAlreadyBooked') });
       } else {
         notify({ type: 'error', title: t('common.error'), message: msg });
