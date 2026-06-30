@@ -18,7 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { getWaiterName, orderDateForFilter } from '@/lib/orderUtils';
 import { canEditOrderItems, canPayOrder } from '@/lib/orderEdit';
-import { canCreateOrders, canPlaceOrders, canOperateCashRegister } from '@/lib/roles';
+import { canCreateOrders, canPlaceOrders, canOperateCashRegister, isWaiter } from '@/lib/roles';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { reportStockShortage, type StockFailure } from '@/lib/stock';
@@ -26,10 +26,10 @@ import { t, orderStatus } from '@/i18n';
 import { matchesDateRange, matchesSearch, todayRange, yesterdayRange } from '@/lib/filters';
 import { ListFilters, type ListFiltersValue } from '@/components/ui/ListFilters';
 import type { OrderStatus } from '@/types';
-import type { OrderBill } from '@/lib/orderBilling';
+import { buildOrderBill, DEFAULT_SERVICE_FEE_RATE, type OrderBill } from '@/lib/orderBilling';
+import { resolveTableChargeAmount } from '@/lib/tableCharge';
 import { computeOrderCardTotals } from '@/lib/orderCardTotals';
 import { useServiceChargeRate } from '@/hooks/useRestaurantSettings';
-import { DEFAULT_SERVICE_FEE_RATE } from '@/lib/orderBilling';
 
 const statusColor: Record<string, 'green' | 'yellow' | 'blue' | 'gray' | 'red'> = {
   DRAFT: 'gray',
@@ -64,6 +64,7 @@ type OrderRow = {
   discount_amount?: number;
   total: number;
   table_id: string | null;
+  staff_id?: string | null;
   created_at: string;
   paid_at: string | null;
   tables: { name: string; charge_type?: string; charge_amount?: number } | null;
@@ -126,6 +127,9 @@ export function OrdersPage() {
   const [payOrder, setPayOrder] = useState<OrderRow | null>(null);
   const canUpdateItems = canPlaceOrders(profile?.role);
   const canPay = canOperateCashRegister(profile?.role);
+  const isWaiterUser = Boolean(profile?.role && isWaiter(profile.role));
+  const ownsOrder = (order: OrderRow) =>
+    !isWaiterUser || (myStaffId != null && order.staff_id === myStaffId);
   const isKassaOwner = Boolean(
     openKassa &&
       ((openKassa.opened_by_profile_id && openKassa.opened_by_profile_id === profile?.id) ||
@@ -146,6 +150,23 @@ export function OrdersPage() {
     setPayOrder(order);
   };
 
+  const printCheck = (order: OrderRow) => {
+    const items = (order.order_items ?? []).map((it) => ({
+      id: it.id,
+      quantity: it.quantity,
+      unit_price: Number(it.unit_price),
+      products: it.products ?? null,
+    }));
+    const tableCharge = resolveTableChargeAmount(order.tables, 1);
+    const bill = buildOrderBill(items, Number(order.subtotal), resolvedServiceRate, tableCharge);
+    printCheckForOrder(
+      order,
+      order.tables?.name ?? t('common.takeaway'),
+      restaurantFromProfile(profile?.restaurants),
+      bill,
+    );
+  };
+
   const handleDiscard = (order: OrderRow) => {
     if (!canDiscardOrder(order)) {
       notify({ type: 'warning', title: t('errors.orderDiscardWindowExpired') });
@@ -161,14 +182,20 @@ export function OrdersPage() {
 
   const orderList = (orders ?? []) as OrderRow[];
 
+  const searchedOrders = useMemo(
+    () =>
+      orderList.filter((o) =>
+        matchesSearch(filters.search, String(o.order_number), o.tables?.name, getWaiterName(o)),
+      ),
+    [orderList, filters.search],
+  );
+
   const periodOrders = useMemo(
     () =>
-      orderList
-        .filter((o) => matchesDateRange(orderDateForFilter(o), filters.dateFrom, filters.dateTo))
-        .filter((o) =>
-          matchesSearch(filters.search, String(o.order_number), o.tables?.name, getWaiterName(o)),
-        ),
-    [orderList, filters],
+      searchedOrders.filter((o) =>
+        matchesDateRange(orderDateForFilter(o), filters.dateFrom, filters.dateTo),
+      ),
+    [searchedOrders, filters.dateFrom, filters.dateTo],
   );
 
   const counts = useMemo(() => {
@@ -182,19 +209,20 @@ export function OrdersPage() {
     };
     for (const o of periodOrders) {
       if (o.status !== 'PAID' && o.status !== 'CANCELLED') c.active += 1;
-      if (o.status !== 'CANCELLED') c.all += 1;
       if (o.status === 'DRAFT') c.draft += 1;
       if (KITCHEN_STATUSES.includes(o.status)) c.kitchen += 1;
       if (canPayOrder(o.status)) c.payment += 1;
       if (o.status === 'PAID') c.paid += 1;
     }
+    // "All" ignores the date range and shows every non-cancelled order.
+    c.all = searchedOrders.filter((o) => o.status !== 'CANCELLED').length;
     return c;
-  }, [periodOrders]);
+  }, [periodOrders, searchedOrders]);
 
-  const filtered = useMemo(
-    () => periodOrders.filter((o) => matchesView(o, view)),
-    [periodOrders, view],
-  );
+  const filtered = useMemo(() => {
+    const source = view === 'all' ? searchedOrders : periodOrders;
+    return source.filter((o) => matchesView(o, view));
+  }, [periodOrders, searchedOrders, view]);
 
   const hasDiscardableOrders = useMemo(
     () => Boolean(canUpdateItems && filtered.some((o) => canDiscardOrder(o))),
@@ -389,7 +417,7 @@ export function OrdersPage() {
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-                  {canUpdateItems && canDiscardOrder(order) && (
+                  {canUpdateItems && canDiscardOrder(order) && ownsOrder(order) && (
                     <Button
                       size="sm"
                       variant="danger"
@@ -402,12 +430,17 @@ export function OrdersPage() {
                       </span>
                     </Button>
                   )}
-                  {canUpdateItems && canEditOrderItems(order.status) && (
+                  {canUpdateItems && canEditOrderItems(order.status) && ownsOrder(order) && (
                     <Button size="sm" variant="secondary" onClick={() => navigate(`/orders/${order.id}/edit`)}>
                       {t('orders.updateItems')}
                     </Button>
                   )}
-                  {order.status === 'DRAFT' && (
+                  {isWaiterUser && !ownsOrder(order) && canEditOrderItems(order.status) && (
+                    <Button size="sm" variant="secondary" onClick={() => navigate(`/orders/${order.id}/edit`)}>
+                      {t('orders.viewOrder')}
+                    </Button>
+                  )}
+                  {order.status === 'DRAFT' && ownsOrder(order) && (
                     <Button
                       size="sm"
                       loading={sendKitchen.isPending && sendKitchen.variables === order.id}
@@ -428,6 +461,11 @@ export function OrdersPage() {
                   {canPay && canPayOrder(order.status) && (
                     <Button size="sm" disabled={Boolean(openKassa && !isKassaOwner)} onClick={() => startPay(order)}>
                       {t('orders.pay')}
+                    </Button>
+                  )}
+                  {canPay && items.length > 0 && (
+                    <Button size="sm" variant="secondary" onClick={() => printCheck(order)}>
+                      {t('payModal.printCheck')}
                     </Button>
                   )}
                 </div>

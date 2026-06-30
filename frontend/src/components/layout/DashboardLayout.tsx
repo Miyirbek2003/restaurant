@@ -5,10 +5,12 @@ import { MobileNavProvider } from '@/contexts/MobileNavContext';
 import { useEffect } from 'react';
 import { useThemeStore } from '@/stores/themeStore';
 import { useBookingArrivalAlerts } from '@/hooks/useBookingArrivalAlerts';
+import { useIdleLock } from '@/hooks/useIdleLock';
 
 export function DashboardLayout() {
   const dark = useThemeStore((s) => s.dark);
   useBookingArrivalAlerts();
+  useIdleLock();
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);

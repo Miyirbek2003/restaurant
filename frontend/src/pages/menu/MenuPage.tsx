@@ -97,10 +97,12 @@ export function MenuPage() {
 
   const categoriesWithCounts = useMemo(
     () =>
-      categories.map((cat) => ({
-        ...cat,
-        count: productList.filter((p) => p.category_id === cat.id).length,
-      })),
+      categories
+        .map((cat) => ({
+          ...cat,
+          count: productList.filter((p) => p.category_id === cat.id).length,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
     [categories, productList],
   );
 
@@ -114,14 +116,12 @@ export function MenuPage() {
   const showCategoryGrid = !isSearching && !menuCategoryId;
 
   const visibleProducts = useMemo(() => {
-    if (isSearching) {
-      const q = searchTrim.toLowerCase();
-      return productList.filter((p) => p.name.toLowerCase().includes(q));
-    }
-    if (menuCategoryId) {
-      return productList.filter((p) => p.category_id === menuCategoryId);
-    }
-    return [];
+    const list = isSearching
+      ? productList.filter((p) => p.name.toLowerCase().includes(searchTrim.toLowerCase()))
+      : menuCategoryId
+        ? productList.filter((p) => p.category_id === menuCategoryId)
+        : [];
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [productList, isSearching, searchTrim, menuCategoryId]);
 
   const editingWarehouseProduct = Boolean(editProductId && warehouseProductIds?.has(editProductId));

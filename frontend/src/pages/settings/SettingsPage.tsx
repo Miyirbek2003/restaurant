@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { ImageUrlField } from '@/components/ui/ImageUrlField';
 import { RestaurantRequired } from '@/components/RestaurantRequired';
+import { TerminalsCard } from '@/components/settings/TerminalsCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyRestaurant, useUpdateRestaurantLogo } from '@/hooks/useMyRestaurant';
 import { useRestaurantSettings, useUpdateRestaurantSettings } from '@/hooks/useRestaurantSettings';
@@ -148,6 +149,8 @@ export function SettingsPage() {
           </div>
         </form>
       </Card>
+
+      <TerminalsCard />
     </div>
   );
 }

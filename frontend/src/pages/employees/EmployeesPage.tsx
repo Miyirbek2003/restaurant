@@ -14,7 +14,10 @@ import {
   useCreateStaffMember,
   useUpdateStaffStatus,
   useDeleteStaffMember,
+  useSetStaffPin,
+  useClearStaffPin,
   type StaffRole,
+  type RestaurantStaff,
 } from '@/hooks/useEmployees';
 import {
   useStaffInvites,
@@ -52,6 +55,10 @@ export function EmployeesPage() {
   const createStaff = useCreateStaffMember();
   const updateStatus = useUpdateStaffStatus();
   const deleteStaff = useDeleteStaffMember();
+  const setStaffPin = useSetStaffPin();
+  const clearStaffPin = useClearStaffPin();
+  const [pinTarget, setPinTarget] = useState<RestaurantStaff | null>(null);
+  const [pinValue, setPinValue] = useState('');
   const { data: paidOrders = [], isFetching: loadingSales } = useWaiterPaidOrders();
   const [salesDateFilters, setSalesDateFilters] = useState<DateRangeValue>({
     dateFrom: '',
@@ -340,6 +347,7 @@ export function EmployeesPage() {
                   <th>{t('employees.role')}</th>
                   <th>{t('employees.phone')}</th>
                   <th>{t('common.status')}</th>
+                  <th>{t('terminal.pin')}</th>
                   <th>{t('common.actions')}</th>
                 </tr>
               </thead>
@@ -357,6 +365,47 @@ export function EmployeesPage() {
                       <Badge color={statusBadge[emp.status] ?? 'gray'} size="sm">
                         {emp.status}
                       </Badge>
+                    </td>
+                    <td>
+                      {emp.role === 'KITCHEN' ? (
+                        <span className="text-slate-400">—</span>
+                      ) : !emp.auth_user_id ? (
+                        <span className="text-xs text-slate-400" title={t('terminal.pinNeedsAuth')}>
+                          {t('terminal.pinNeedsAuth')}
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge color={emp.pin_set_at ? 'green' : 'gray'} size="sm">
+                            {emp.pin_set_at ? t('terminal.pinSet') : t('terminal.pinNotSet')}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setPinTarget(emp);
+                              setPinValue('');
+                            }}
+                          >
+                            {emp.pin_set_at ? t('terminal.changePin') : t('terminal.setPin')}
+                          </Button>
+                          {emp.pin_set_at && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                clearStaffPin.mutate(emp.id, {
+                                  onSuccess: () =>
+                                    notify({ type: 'success', title: t('terminal.pinCleared') }),
+                                  onError: (err) =>
+                                    notify({ type: 'error', title: t('common.error'), message: getErrorMessage(err) }),
+                                })
+                              }
+                            >
+                              {t('terminal.clearPin')}
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div className="flex flex-wrap gap-1">
@@ -401,6 +450,56 @@ export function EmployeesPage() {
           </div>
         )}
       </CollapsibleSection>
+
+      <Modal
+        open={pinTarget !== null}
+        onClose={() => setPinTarget(null)}
+        title={pinTarget ? `${t('terminal.setPin')} — ${pinTarget.name}` : t('terminal.setPin')}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!pinTarget) return;
+            if (!/^[0-9]{4,6}$/.test(pinValue)) {
+              notify({ type: 'error', title: t('terminal.pinInvalid') });
+              return;
+            }
+            setStaffPin.mutate(
+              { staffId: pinTarget.id, pin: pinValue },
+              {
+                onSuccess: () => {
+                  notify({ type: 'success', title: t('terminal.pinSaved') });
+                  setPinTarget(null);
+                  setPinValue('');
+                },
+                onError: (err) =>
+                  notify({ type: 'error', title: t('common.error'), message: getErrorMessage(err) }),
+              },
+            );
+          }}
+          className="space-y-4"
+        >
+          <Input
+            label={t('terminal.pin')}
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            value={pinValue}
+            onChange={(e) => setPinValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="••••"
+            required
+          />
+          <p className="text-xs text-slate-500">{t('terminal.pinDigitsHint')}</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setPinTarget(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="submit" loading={setStaffPin.isPending}>
+              {t('common.save')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title={t('employees.createInviteTitle')}>
         <form onSubmit={handleCreateInvite} className="space-y-4">

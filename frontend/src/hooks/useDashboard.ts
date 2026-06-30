@@ -7,7 +7,9 @@ export interface DashboardData {
   revenueToday: number;
   revenueWeek: number;
   revenueMonth: number;
+  expensesToday: number;
   expensesMonth: number;
+  profitToday: number;
   profitMonth: number;
   openOrders: number;
   occupiedTables: number;
@@ -33,6 +35,7 @@ export function useDashboard() {
         paymentsWeek,
         paymentsMonth,
         expensesRes,
+        expensesTodayRes,
         openOrdersRes,
         tablesRes,
         ordersTodayRes,
@@ -61,6 +64,11 @@ export function useDashboard() {
           .select('amount')
           .eq('restaurant_id', restaurantId!)
           .gte('date', month.slice(0, 10)),
+        supabase
+          .from('expenses')
+          .select('amount')
+          .eq('restaurant_id', restaurantId!)
+          .eq('date', today.slice(0, 10)),
         supabase
           .from('orders')
           .select('id', { count: 'exact', head: true })
@@ -98,13 +106,17 @@ export function useDashboard() {
         .slice(0, 5);
 
       const revenueMonth = sum(paymentsMonth.data);
+      const revenueToday = sum(paymentsToday.data);
       const expensesMonth = (expensesRes.data ?? []).reduce((a, e) => a + Number(e.amount), 0);
+      const expensesToday = (expensesTodayRes.data ?? []).reduce((a, e) => a + Number(e.amount), 0);
 
       return {
-        revenueToday: sum(paymentsToday.data),
+        revenueToday,
         revenueWeek: sum(paymentsWeek.data),
         revenueMonth,
+        expensesToday,
         expensesMonth,
+        profitToday: revenueToday - expensesToday,
         profitMonth: revenueMonth - expensesMonth,
         openOrders: openOrdersRes.count ?? 0,
         occupiedTables: tables.filter((t) => t.status === 'OCCUPIED').length,

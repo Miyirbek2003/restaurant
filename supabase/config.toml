@@ -31,3 +31,8 @@ enable_confirmations = false
 
 [realtime]
 enabled = true
+
+# Terminal PIN login uses terminal_id + token (not a user JWT).
+[functions.waiter-pin-login]
+verify_jwt = false
+

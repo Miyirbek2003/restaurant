@@ -135,6 +135,11 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
   const sendKitchen = useSendToKitchen();
   const closeOrder = useCloseOrder();
   const mayPayRole = canOperateCashRegister(profile?.role);
+  const ownsOrder =
+    !isEdit ||
+    !isWaiterUser ||
+    (myStaffId != null && (order as { staff_id?: string | null } | undefined)?.staff_id === myStaffId);
+  const viewOnly = Boolean(isEdit && isWaiterUser && order && !ownsOrder);
   const isCashierBlockedByAnotherKassa = Boolean(
     !isEdit &&
       isCashierUser &&
@@ -408,7 +413,7 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
   };
 
   const submitEdit = async () => {
-    if (!orderId || !dirty) return;
+    if (viewOnly || !orderId || !dirty) return;
     if (!isManagerUser && !validateOrderItemEditsForWaiter(baseline, draft)) {
       notify({ type: 'warning', title: t('orderDetail.existingItemLocked') });
       return;
@@ -438,6 +443,7 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
   );
 
   const handleOpenPay = () => {
+    if (viewOnly) return;
     if (!openKassa) {
       notify({ type: 'warning', title: t('kassa.mustOpenFirst') });
       return;
@@ -490,7 +496,7 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
   };
 
   const submitEditAndSendKitchen = async () => {
-    if (!orderId || !order) return;
+    if (viewOnly || !orderId || !order) return;
     try {
       if (dirty) {
         if (!isManagerUser && !validateOrderItemEditsForWaiter(baseline, draft)) {
@@ -623,37 +629,43 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
                     {byWeight ? ' / кг' : ` ${t('orders.each')}`}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    className={cartQtyBtn}
-                    disabled={!canDecrease}
-                    onClick={() => {
-                      if (byWeight) openWeightModal(line.product_id);
-                      else void updateQty(line.product_id, -1);
-                    }}
-                    aria-label={t('orderDetail.decreaseQty')}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <span className="min-w-[2.75rem] text-center text-xs font-semibold tabular-nums">
+                {viewOnly ? (
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">
                     {formatSaleQuantity(line.quantity, line.sale_unit)}
                   </span>
-                  <button
-                    type="button"
-                    className={cn(
-                      cartQtyBtn,
-                      'border-primary-400 text-primary-600 hover:bg-primary-50 dark:border-primary-500 dark:text-primary-400 dark:hover:bg-primary-950/50',
-                    )}
-                    onClick={() => {
-                      if (byWeight) openWeightModal(line.product_id);
-                      else void updateQty(line.product_id, 1);
-                    }}
-                    aria-label={byWeight ? t('orders.weightAddShort') : t('orderDetail.increaseQty')}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      className={cartQtyBtn}
+                      disabled={!canDecrease}
+                      onClick={() => {
+                        if (byWeight) openWeightModal(line.product_id);
+                        else void updateQty(line.product_id, -1);
+                      }}
+                      aria-label={t('orderDetail.decreaseQty')}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <span className="min-w-[2.75rem] text-center text-xs font-semibold tabular-nums">
+                      {formatSaleQuantity(line.quantity, line.sale_unit)}
+                    </span>
+                    <button
+                      type="button"
+                      className={cn(
+                        cartQtyBtn,
+                        'border-primary-400 text-primary-600 hover:bg-primary-50 dark:border-primary-500 dark:text-primary-400 dark:hover:bg-primary-950/50',
+                      )}
+                      onClick={() => {
+                        if (byWeight) openWeightModal(line.product_id);
+                        else void updateQty(line.product_id, 1);
+                      }}
+                      aria-label={byWeight ? t('orders.weightAddShort') : t('orderDetail.increaseQty')}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}
@@ -668,7 +680,7 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
           </div>
         </>
       )}
-      {options.showActions && (
+      {options.showActions && !viewOnly && (
         <>
           <p className="text-xs text-slate-500">{t('orders.stockHint')}</p>
           <div className="flex flex-col gap-2 lg:flex-col">
@@ -702,7 +714,7 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
   );
 
   const mobileCartActions =
-    displayCart.length > 0 ? (
+    displayCart.length > 0 && !viewOnly ? (
       <div className="fixed-bottom-bar space-y-2">
         <div className="flex items-center justify-between text-sm">
           <span className="font-medium">{t('orders.subtotal')}</span>
@@ -743,7 +755,9 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
     ) : null;
 
   const pageTitle = isEdit && order
-    ? t('orders.editOrder', { n: order.order_number })
+    ? viewOnly
+      ? t('orders.viewOrderTitle', { n: order.order_number })
+      : t('orders.editOrder', { n: order.order_number })
     : t('orders.newOrderTitle');
 
   return (
@@ -764,7 +778,11 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
         <div className="space-y-4 lg:col-span-2">
           {isEdit && (
             <p className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-              {isManagerUser ? t('orderDetail.editHintManager') : t('orderDetail.editHintWaiter')}
+              {viewOnly
+                ? t('orders.viewOnlyNotice')
+                : isManagerUser
+                  ? t('orderDetail.editHintManager')
+                  : t('orderDetail.editHintWaiter')}
             </p>
           )}
 
@@ -824,18 +842,20 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
             )}
           </Card>
 
-          <OrderProductPicker
-            products={productList}
-            categories={categories}
-            cart={displayCart}
-            onAdd={handlePickerAdd}
-            onRemove={handlePickerRemove}
-            minCartQty={
-              isEdit && !isManagerUser
-                ? (productId) => baselineQtyForProduct(baseline, productId)
-                : undefined
-            }
-          />
+          {!viewOnly && (
+            <OrderProductPicker
+              products={productList}
+              categories={categories}
+              cart={displayCart}
+              onAdd={handlePickerAdd}
+              onRemove={handlePickerRemove}
+              minCartQty={
+                isEdit && !isManagerUser
+                  ? (productId) => baselineQtyForProduct(baseline, productId)
+                  : undefined
+              }
+            />
+          )}
 
           {weightModal && (
             <WeightEntryModal

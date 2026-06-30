@@ -15,6 +15,8 @@ export interface RestaurantStaff {
   status: StaffStatus;
   hire_date: string | null;
   created_at: string;
+  auth_user_id: string | null;
+  pin_set_at: string | null;
 }
 
 export function useEmployees(role?: StaffRole) {
@@ -26,7 +28,9 @@ export function useEmployees(role?: StaffRole) {
     queryFn: async () => {
       let q = supabase
         .from('restaurant_staff')
-        .select('id, restaurant_id, name, role, phone, email, status, hire_date, created_at')
+        .select(
+          'id, restaurant_id, name, role, phone, email, status, hire_date, created_at, auth_user_id, pin_set_at',
+        )
         .eq('restaurant_id', restaurantId!)
         .order('name');
 
@@ -90,6 +94,28 @@ export function useDeleteStaffMember() {
   return useMutation({
     mutationFn: async (staffId: string) => {
       const { error } = await supabase.from('restaurant_staff').delete().eq('id', staffId);
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['restaurant-staff'] }),
+  });
+}
+
+export function useSetStaffPin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ staffId, pin }: { staffId: string; pin: string }) => {
+      const { error } = await supabase.rpc('set_staff_pin', { p_staff_id: staffId, p_pin: pin });
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['restaurant-staff'] }),
+  });
+}
+
+export function useClearStaffPin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (staffId: string) => {
+      const { error } = await supabase.rpc('clear_staff_pin', { p_staff_id: staffId });
       if (error) throw error;
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['restaurant-staff'] }),

@@ -67,7 +67,8 @@ export function OrderProductPicker({ products, categories, cart, onAdd, onRemove
           ...cat,
           count: productsByCategory.get(cat.id)?.length ?? 0,
         }))
-        .filter((cat) => cat.count > 0),
+        .filter((cat) => cat.count > 0)
+        .sort((a, b) => a.name.localeCompare(b.name)),
     [activeCategories, productsByCategory],
   );
 
@@ -77,14 +78,12 @@ export function OrderProductPicker({ products, categories, cart, onAdd, onRemove
   );
 
   const visibleProducts = useMemo(() => {
-    if (isSearching) {
-      const q = searchTrim.toLowerCase();
-      return products.filter((p) => p.name.toLowerCase().includes(q));
-    }
-    if (categoryId) {
-      return productsByCategory.get(categoryId) ?? [];
-    }
-    return [];
+    const list = isSearching
+      ? products.filter((p) => p.name.toLowerCase().includes(searchTrim.toLowerCase()))
+      : categoryId
+        ? productsByCategory.get(categoryId) ?? []
+        : [];
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [isSearching, searchTrim, categoryId, products, productsByCategory]);
 
   const showCategories = !isSearching && !categoryId;

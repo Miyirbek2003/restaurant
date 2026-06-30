@@ -88,7 +88,7 @@ export function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>{t('dashboard.revenue')}</CardTitle>
@@ -103,6 +103,29 @@ export function DashboardPage() {
                 <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fill="#3b82f680" />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('dashboard.profitToday')}</CardTitle>
+          </CardHeader>
+          <div className="space-y-4">
+            <div className="flex justify-between">
+              <span className="text-slate-500">{t('dashboard.revenue')}</span>
+              <span className="font-medium text-emerald-600">{formatCurrency(data.revenueToday, currency)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">{t('dashboard.expenses')}</span>
+              <span className="font-medium text-red-500">{formatCurrency(data.expensesToday, currency)}</span>
+            </div>
+            <hr className="border-slate-200 dark:border-slate-700" />
+            <div className="flex justify-between text-lg font-bold">
+              <span>{t('dashboard.netProfit')}</span>
+              <span className={data.profitToday >= 0 ? 'text-emerald-600' : 'text-red-500'}>
+                {formatCurrency(data.profitToday, currency)}
+              </span>
+            </div>
           </div>
         </Card>
 
