@@ -189,6 +189,58 @@ export function useSessionPaymentTotals(sessionId: string | undefined, openedAt:
   });
 }
 
+export type SessionSoldItem = {
+  productId: string | null;
+  name: string;
+  quantitySold: number;
+};
+
+export function useSessionSoldItems(sessionId: string | undefined, enabled: boolean) {
+  const restaurantId = useRestaurantId();
+
+  return useQuery({
+    queryKey: ['cash-register-session-items', sessionId],
+    enabled: !!restaurantId && !!sessionId && enabled,
+    queryFn: async () => {
+      const { data: pays, error: payErr } = await supabase
+        .from('payments')
+        .select('order_id')
+        .eq('restaurant_id', restaurantId!)
+        .eq('cash_register_session_id', sessionId!)
+        .eq('status', 'COMPLETED');
+      if (payErr) throw payErr;
+
+      const orderIds = [...new Set((pays ?? []).map((p) => p.order_id).filter(Boolean))] as string[];
+      if (orderIds.length === 0) return [] as SessionSoldItem[];
+
+      const { data: items, error: itemErr } = await supabase
+        .from('order_items')
+        .select('product_id, product_name, quantity')
+        .eq('restaurant_id', restaurantId!)
+        .in('order_id', orderIds);
+      if (itemErr) throw itemErr;
+
+      const map = new Map<string, SessionSoldItem>();
+      for (const it of items ?? []) {
+        const key = it.product_id ?? `name:${it.product_name}`;
+        const qty = Number(it.quantity) || 0;
+        const existing = map.get(key);
+        if (existing) {
+          existing.quantitySold += qty;
+        } else {
+          map.set(key, {
+            productId: it.product_id ?? null,
+            name: it.product_name ?? '—',
+            quantitySold: qty,
+          });
+        }
+      }
+
+      return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+    },
+  });
+}
+
 export function useOpenOrdersCount() {
   const restaurantId = useRestaurantId();
 

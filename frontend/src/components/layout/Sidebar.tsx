@@ -71,7 +71,7 @@ const navGroups: NavGroup[] = [
       { to: '/inventory', labelKey: 'nav.warehouse', icon: Package, roles: ['MANAGER', 'CASHIER'] },
       { to: '/expenses', labelKey: 'nav.expenses', icon: Receipt, roles: ['MANAGER', 'CASHIER'] },
       { to: '/incomes', labelKey: 'nav.incomes', icon: Banknote, roles: ['MANAGER', 'CASHIER'] },
-      { to: '/kassa', labelKey: 'nav.kassa', icon: Wallet, roles: ['MANAGER', 'CASHIER'] },
+      { to: '/cash-register', labelKey: 'nav.kassa', icon: Wallet, roles: ['MANAGER', 'CASHIER'] },
       { to: '/product-profit', labelKey: 'nav.productProfit', icon: TrendingUp, roles: ['MANAGER'] },
     ],
   },

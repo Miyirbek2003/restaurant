@@ -36,10 +36,22 @@ type PayOrderModalProps = {
   items: OrderItem[];
   subtotal: number;
   table?: TableChargeFields | null;
+  /** When the order was opened — used to auto-calculate hours for hourly tables. */
+  startedAt?: string | Date | null;
   loading?: boolean;
   onConfirm: (grandTotal: number, payments: PaymentLine[], bill: OrderBill) => void;
   onPrintCheck?: (bill: OrderBill) => void;
 };
+
+/** Elapsed time since the order opened, rounded up to the next half hour (min 1h). */
+function autoHoursFromStart(startedAt?: string | Date | null): number {
+  if (!startedAt) return 1;
+  const start = new Date(startedAt).getTime();
+  if (Number.isNaN(start)) return 1;
+  const elapsedHours = (Date.now() - start) / 3_600_000;
+  if (elapsedHours <= 0) return 1;
+  return Math.max(1, Math.ceil(elapsedHours * 2) / 2);
+}
 
 function DottedRow({ label, value }: { label: string; value: string }) {
   return (
@@ -61,6 +73,7 @@ export function PayOrderModal({
   items,
   subtotal,
   table,
+  startedAt,
   loading,
   onConfirm,
   onPrintCheck,
@@ -93,12 +106,17 @@ export function PayOrderModal({
     if (!open) return;
     setPreset('single');
     setSingleMethod('CASH');
-    setHours('1');
     setCustomLines([
       { method: 'CASH', amount: 0 },
       { method: 'CLICK', amount: 0 },
     ]);
   }, [open, bill.grandTotal]);
+
+  // Auto-fill table hours from how long the order has been open (hourly tables).
+  useEffect(() => {
+    if (!open) return;
+    setHours(String(autoHoursFromStart(startedAt)));
+  }, [open, startedAt]);
 
   const paymentLines = useMemo((): PaymentLine[] => {
     if (preset === 'custom') {
@@ -182,6 +200,7 @@ export function PayOrderModal({
             value={hours}
             onChange={(e) => setHours(e.target.value)}
           />
+          <p className="mt-1 text-xs text-slate-500">{t('payModal.tableHoursAuto')}</p>
         </div>
       )}
 

@@ -161,10 +161,7 @@ export function buildOrderReceiptHtml(data: OrderReceiptData): string {
     )
     .join('');
 
-  const serviceFeeHtml =
-    data.bill.serviceFee > 0.005
-      ? `<div class="row"><span>${escapeHtml(t('receipt.serviceFee', { n: servicePct }))}</span><span>${escapeHtml(formatCurrency(data.bill.serviceFee))}</span></div>`
-      : '';
+  const serviceFeeHtml = `<div class="row"><span>${escapeHtml(t('receipt.serviceFee', { n: servicePct }))}</span><span>${escapeHtml(formatCurrency(data.bill.serviceFee))}</span></div>`;
 
   return `<!DOCTYPE html>
 <html lang="ru">

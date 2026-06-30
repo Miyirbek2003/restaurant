@@ -5,7 +5,7 @@ export const ROLE_HOME: Record<UserRole, string> = {
   MANAGER: '/dashboard',
   WAITER: '/tables',
   KITCHEN: '/login',
-  CASHIER: '/kassa',
+  CASHIER: '/cash-register',
 };
 
 /** Paths for restaurant back-office (manager UI). Keep in sync with App.tsx routes. */
@@ -23,13 +23,13 @@ export const MANAGER_PATH_PREFIXES = [
   '/discounts',
   '/employees',
   '/qr-menu',
-  '/kassa',
+  '/cash-register',
   '/product-profit',
   '/settings',
   '/bookings',
 ] as const;
 
-export const CASHIER_PATH_PREFIXES = ['/kassa', '/orders', '/tables'] as const;
+export const CASHIER_PATH_PREFIXES = ['/cash-register', '/orders', '/tables'] as const;
 
 export const MANAGER_ROUTE_ROLES: UserRole[] = ['MANAGER'];
 

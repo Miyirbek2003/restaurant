@@ -140,7 +140,7 @@ export function OrdersPage() {
   const startPay = (order: OrderRow) => {
     if (!openKassa) {
       notify({ type: 'warning', title: t('kassa.mustOpenFirst') });
-      navigate('/kassa');
+      navigate('/cash-register');
       return;
     }
     if (!isKassaOwner) {
@@ -484,6 +484,7 @@ export function OrdersPage() {
           table={payOrder.tables}
           items={payOrder.order_items ?? []}
           subtotal={Number(payOrder.subtotal)}
+          startedAt={payOrder.created_at}
           loading={closeOrder.isPending}
           onConfirm={confirmPay}
           onPrintCheck={(bill) => {

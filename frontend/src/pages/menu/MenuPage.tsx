@@ -357,11 +357,11 @@ export function MenuPage() {
                 {categoriesWithCounts.length === 0 ? (
                   <EmptyState title={t('menu.noCategories')} description={t('menu.noCategoriesDesc')} />
                 ) : (
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                     {categoriesWithCounts.map((cat) => (
                       <div key={cat.id} className="relative">
                         {canEdit && (
-                          <div className="absolute right-1.5 top-1.5 z-10">
+                          <div className="absolute right-2 top-2 z-10">
                             <CategoryCardMenu
                               isActive={cat.is_active}
                               onEdit={() => openEditCategory(cat as CategoryRow)}
@@ -376,23 +376,23 @@ export function MenuPage() {
                           type="button"
                           onClick={() => setMenuCategoryId(cat.id)}
                           className={cn(
-                            'flex w-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white text-left',
+                            'flex w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left',
                             'transition hover:border-primary-300 active:scale-[0.98]',
                             'dark:border-slate-700 dark:bg-slate-900 dark:hover:border-primary-600',
                             !cat.is_active && 'opacity-60',
                           )}
                         >
-                          <div className="h-16 w-full overflow-hidden bg-slate-100 dark:bg-slate-800">
+                          <div className="h-36 w-full overflow-hidden bg-slate-100 dark:bg-slate-800">
                             <MenuImage
                               src={(cat as CategoryRow).image_url}
                               alt={cat.name}
                               className="!h-full !w-full !rounded-none object-cover"
-                              size="sm"
+                              size="lg"
                             />
                           </div>
-                          <div className="p-2">
-                            <p className="line-clamp-2 text-xs font-semibold leading-tight">{cat.name}</p>
-                            <p className="text-[11px] text-slate-500">{t('qr.itemCount', { n: cat.count })}</p>
+                          <div className="p-3">
+                            <p className="line-clamp-2 text-base font-semibold leading-tight">{cat.name}</p>
+                            <p className="mt-0.5 text-sm text-slate-500">{t('qr.itemCount', { n: cat.count })}</p>
                           </div>
                         </button>
                       </div>
@@ -403,17 +403,19 @@ export function MenuPage() {
             )}
 
             {!showCategoryGrid && !isSearching && selectedMenuCategory && (
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="ghost" size="sm" onClick={() => setMenuCategoryId(null)}>
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/60">
+                <Button type="button" variant="secondary" onClick={() => setMenuCategoryId(null)}>
                   <ArrowLeft className="h-4 w-4" />
                   {t('menu.backToCategories')}
                 </Button>
-                <span className="truncate text-sm font-semibold">{selectedMenuCategory.name}</span>
+                <span className="truncate text-lg font-bold text-slate-800 dark:text-slate-100">
+                  {selectedMenuCategory.name}
+                </span>
               </div>
             )}
 
             {!showCategoryGrid && (
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {visibleProducts.length === 0 ? (
                   <p className="col-span-full rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-700">
                     {t('menu.noProducts')}
@@ -426,27 +428,27 @@ export function MenuPage() {
                     return (
                       <div
                         key={p.id}
-                        className="flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+                        className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
                       >
-                        <div className="flex gap-2 p-2">
+                        <div className="flex gap-3 p-3">
                           <MenuImage
                             src={p.image_url}
                             alt={p.name}
-                            size="sm"
-                            className="!h-11 !w-11 shrink-0 rounded-md"
+                            size="md"
+                            className="!h-20 !w-20 shrink-0 rounded-lg"
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="line-clamp-2 text-xs font-medium leading-tight">{p.name}</p>
-                            <p className="text-xs font-bold tabular-nums text-primary-600 dark:text-primary-400">
+                            <p className="line-clamp-2 text-base font-semibold leading-tight">{p.name}</p>
+                            <p className="mt-1 text-base font-bold tabular-nums text-primary-600 dark:text-primary-400">
                               {formatCurrency(Number(p.price))}
                               {byWeight && <span className="font-normal text-slate-500"> / кг</span>}
                             </p>
-                            <p className="text-[11px] text-slate-500">
+                            <p className="mt-0.5 text-sm text-slate-500">
                               {t('menu.stock')}: {stockLabel}
                             </p>
                           </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-1 border-t border-slate-100 px-2 py-2 dark:border-slate-800">
+                        <div className="flex flex-wrap items-center gap-1 border-t border-slate-100 px-3 py-2.5 dark:border-slate-800">
                           <Badge color={p.is_active ? 'green' : 'gray'} size="sm">
                             {p.is_active ? t('common.active') : t('common.inactive')}
                           </Badge>

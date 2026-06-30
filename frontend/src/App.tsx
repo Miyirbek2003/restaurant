@@ -79,7 +79,7 @@ export default function App() {
         <Route path="orders" element={<ProtectedRoute roles={cashierAndWaiterAndManager}><OrdersPage /></ProtectedRoute>} />
         <Route path="orders/new" element={<ProtectedRoute roles={waiterAndManager}><CreateOrderPage /></ProtectedRoute>} />
         <Route path="orders/:id/edit" element={<ProtectedRoute roles={waiterAndManager}><EditOrderPage /></ProtectedRoute>} />
-        <Route path="kassa" element={<ProtectedRoute roles={cashierAndManager}><KassaPage /></ProtectedRoute>} />
+        <Route path="cash-register" element={<ProtectedRoute roles={cashierAndManager}><KassaPage /></ProtectedRoute>} />
         <Route
           path="product-profit"
           element={

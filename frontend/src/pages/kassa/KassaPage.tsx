@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { RestaurantRequired } from '@/components/RestaurantRequired';
 import { CloseCashRegisterModal } from '@/components/kassa/CloseCashRegisterModal';
 import { KassaFactBreakdown } from '@/components/kassa/KassaFactBreakdown';
+import { SessionSoldItems } from '@/components/kassa/SessionSoldItems';
 import {
   useOpenCashRegisterSession,
   useCashRegisterSessions,
@@ -234,6 +235,26 @@ export function KassaPage() {
               options={historyCashierOptions}
             />
           </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="w-[9.5rem]">
+              <Input
+                label={t('filters.dateFrom')}
+                type="date"
+                value={historyDateFrom}
+                max={historyDateTo || undefined}
+                onChange={(e) => setHistoryDateFrom(e.target.value)}
+              />
+            </div>
+            <div className="w-[9.5rem]">
+              <Input
+                label={t('filters.dateTo')}
+                type="date"
+                value={historyDateTo}
+                min={historyDateFrom || undefined}
+                onChange={(e) => setHistoryDateTo(e.target.value)}
+              />
+            </div>
+          </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Button size="sm" variant="secondary" onClick={() => applyHistoryRange(todayRange())}>
               {t('filters.today')}
@@ -301,6 +322,7 @@ export function KassaPage() {
                           {t('kassa.shortage')}: {formatCurrency(shortage)}
                         </p>
                       )}
+                      <SessionSoldItems sessionId={s.id} />
                     </>
                   )}
                 </Card>

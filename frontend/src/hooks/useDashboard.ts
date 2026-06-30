@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useRestaurantId } from '@/contexts/AuthContext';
+import { dateToIsoDay } from '@/lib/filters';
 import { startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 
 export interface DashboardData {
@@ -29,6 +30,10 @@ export function useDashboard() {
       const today = startOfDay(now).toISOString();
       const week = startOfWeek(now).toISOString();
       const month = startOfMonth(now).toISOString();
+      // Expenses store a local DATE; match using the local calendar date, not the
+      // UTC slice of an ISO timestamp (which can be the previous day for +TZ users).
+      const todayLocalDate = dateToIsoDay(now);
+      const monthStartLocalDate = dateToIsoDay(startOfMonth(now));
 
       const [
         paymentsToday,
@@ -63,12 +68,12 @@ export function useDashboard() {
           .from('expenses')
           .select('amount')
           .eq('restaurant_id', restaurantId!)
-          .gte('date', month.slice(0, 10)),
+          .gte('date', monthStartLocalDate),
         supabase
           .from('expenses')
           .select('amount')
           .eq('restaurant_id', restaurantId!)
-          .eq('date', today.slice(0, 10)),
+          .eq('date', todayLocalDate),
         supabase
           .from('orders')
           .select('id', { count: 'exact', head: true })

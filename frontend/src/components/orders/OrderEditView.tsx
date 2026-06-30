@@ -565,6 +565,7 @@ export function OrderEditView({
         table={order.tables as { charge_type?: string; charge_amount?: number } | null}
         items={payItems}
         subtotal={bill.mealSubtotal}
+        startedAt={order.created_at}
         loading={closeOrder.isPending}
         onConfirm={confirmPay}
         onPrintCheck={handlePrintCheck}
