@@ -51,42 +51,70 @@ Deno.serve(async (req) => {
     const action = body.action as string;
 
     if (action === 'create') {
-      const { email, password, name, phone, role = 'WAITER' } = body;
-      if (!email || !password || !name) {
-        return json({ error: 'email, password, and name are required' }, 400);
+      const { email, name, phone, role = 'WAITER' } = body;
+      const trimmedEmail = String(email ?? '').trim();
+      const trimmedName = String(name ?? '').trim();
+      const trimmedPhone = String(phone ?? '').trim();
+
+      if (!trimmedEmail || !trimmedName || !trimmedPhone) {
+        return json({ error: 'email, name, and phone are required' }, 400);
       }
-      if (!['WAITER', 'KITCHEN'].includes(role)) {
-        return json({ error: 'role must be WAITER or KITCHEN' }, 400);
+      if (!['WAITER', 'CASHIER'].includes(role)) {
+        return json({ error: 'role must be WAITER or CASHIER' }, 400);
       }
 
+      const password = crypto.randomUUID() + crypto.randomUUID();
+
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
-        email,
+        email: trimmedEmail,
         password,
         email_confirm: true,
-        user_metadata: { name, role },
+        user_metadata: { name: trimmedName, role },
       });
 
       if (createErr) return json({ error: createErr.message }, 400);
+
+      const userId = created.user.id;
 
       const { error: updateErr } = await admin
         .from('profiles')
         .update({
           restaurant_id: manager.restaurant_id,
           role,
-          name,
-          phone: phone ?? null,
+          name: trimmedName,
+          phone: trimmedPhone,
           status: 'ACTIVE',
-          email,
+          email: trimmedEmail,
         })
-        .eq('id', created.user.id);
+        .eq('id', userId);
 
       if (updateErr) return json({ error: updateErr.message }, 400);
 
+      const { data: staffRow, error: staffErr } = await admin
+        .from('restaurant_staff')
+        .insert({
+          restaurant_id: manager.restaurant_id,
+          name: trimmedName,
+          role,
+          phone: trimmedPhone,
+          email: trimmedEmail,
+          status: 'ACTIVE',
+          auth_user_id: userId,
+        })
+        .select('id')
+        .single();
+
+      if (staffErr) {
+        await admin.auth.admin.deleteUser(userId);
+        return json({ error: staffErr.message }, 400);
+      }
+
       return json({
         data: {
-          id: created.user.id,
-          email,
-          name,
+          id: staffRow.id,
+          auth_user_id: userId,
+          email: trimmedEmail,
+          name: trimmedName,
           role,
           status: 'ACTIVE',
         },

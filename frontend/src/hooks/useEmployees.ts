@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useRestaurantId } from '@/contexts/AuthContext';
+import { createStaffWithAuth } from '@/lib/staffProvisioning';
 
 export type StaffRole = 'WAITER' | 'KITCHEN' | 'CASHIER';
 export type StaffStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
@@ -55,17 +56,28 @@ export function useCreateStaffMember() {
     mutationFn: async (body: {
       name: string;
       role: StaffRole;
-      phone?: string;
+      phone: string;
       email?: string;
     }) => {
       if (!restaurantId) throw new Error('No restaurant assigned');
+
+      const name = body.name.trim();
+      const phone = body.phone.trim();
+      if (!name || !phone) throw new Error('Name and phone are required');
+
+      if (body.role === 'WAITER' || body.role === 'CASHIER') {
+        const email = body.email?.trim();
+        if (!email) throw new Error('Email is required for waiters and cashiers');
+        return createStaffWithAuth({ name, phone, email, role: body.role });
+      }
+
       const { data, error } = await supabase
         .from('restaurant_staff')
         .insert({
           restaurant_id: restaurantId,
-          name: body.name.trim(),
+          name,
           role: body.role,
-          phone: body.phone?.trim() || null,
+          phone,
           email: body.email?.trim() || null,
           status: 'ACTIVE',
         })

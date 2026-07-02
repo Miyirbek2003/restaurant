@@ -3,7 +3,6 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { RoleHomeRedirect } from '@/components/auth/RoleHomeRedirect';
 import { LoginPage } from '@/pages/auth/LoginPage';
-import { JoinStaffPage } from '@/pages/auth/JoinStaffPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { MenuPage } from '@/pages/menu/MenuPage';
 import { TablesPage } from '@/pages/tables/TablesPage';
@@ -47,7 +46,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/join" element={<JoinStaffPage />} />
+      <Route path="/join" element={<Navigate to="/login" replace />} />
       <Route path="/menu/:slug" element={<PublicMenuPage />} />
 
       <Route

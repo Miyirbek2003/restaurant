@@ -19,7 +19,7 @@ async function fetchLoginRole(userId: string): Promise<UserRole | undefined> {
 }
 
 export function useLogin() {
-  const { signIn, signOut, refreshProfile } = useAuthContext();
+  const { signIn, signOut } = useAuthContext();
   const addNotification = useNotificationStore((s) => s.add);
 
   return useMutation({
@@ -30,11 +30,6 @@ export function useLogin() {
       terminalEmailLogin?: boolean;
     }) => {
       await signIn(credentials.email, credentials.password);
-      const { completePendingWaiterInviteIfNeeded, completePendingCashierInviteIfNeeded } =
-        await import('@/lib/staffInvite');
-      const waiterDone = await completePendingWaiterInviteIfNeeded();
-      const cashierDone = await completePendingCashierInviteIfNeeded();
-      if (waiterDone || cashierDone) await refreshProfile();
 
       const {
         data: { session },

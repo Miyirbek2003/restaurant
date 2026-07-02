@@ -8,7 +8,6 @@ import {
 } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { completePendingWaiterInviteIfNeeded } from '@/lib/staffInvite';
 import { clearPinWaiterSession } from '@/lib/waiterTerminal';
 import { activeSessionBlockReason } from '@/lib/staffLoginPolicy';
 import type { Profile } from '@/types';
@@ -148,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, s) => {
+    } = supabase.auth.onAuthStateChange((_event, s) => {
       if (!mounted) return;
       setSession(s);
       setUser(s?.user ?? null);
@@ -159,19 +158,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTimeout(() => {
           if (!mounted) return;
           void (async () => {
-            if (event === 'SIGNED_IN') {
-              try {
-                await completePendingWaiterInviteIfNeeded();
-              } catch (e) {
-                console.error('Pending waiter invite failed:', e);
-              }
-              try {
-                const { completePendingCashierInviteIfNeeded } = await import('@/lib/staffInvite');
-                await completePendingCashierInviteIfNeeded();
-              } catch (e) {
-                console.error('Pending cashier invite failed:', e);
-              }
-            }
             if (mounted) await loadProfile(s.user!.id);
           })();
         }, 0);

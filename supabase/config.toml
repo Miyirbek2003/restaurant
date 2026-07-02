@@ -36,3 +36,6 @@ enabled = true
 [functions.waiter-pin-login]
 verify_jwt = false
 
+[functions.manage-employee]
+verify_jwt = true
+

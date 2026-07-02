@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Copy, Link2 } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
+import { Plus } from 'lucide-react';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -19,12 +18,6 @@ import {
   type StaffRole,
   type RestaurantStaff,
 } from '@/hooks/useEmployees';
-import {
-  useStaffInvites,
-  useCreateStaffInvite,
-  useRevokeStaffInvite,
-  getJoinUrl,
-} from '@/hooks/useStaffInvites';
 import { useRestaurantId } from '@/contexts/AuthContext';
 import { useWaiterPaidOrders, summarizeWaiterSales } from '@/hooks/useStaffSales';
 import { useStockAlerts, useAcknowledgeStockAlert } from '@/hooks/useStockAlerts';
@@ -44,14 +37,6 @@ const statusBadge: Record<string, 'green' | 'yellow' | 'red' | 'gray'> = {
 export function EmployeesPage() {
   const restaurantId = useRestaurantId();
   const { data: staff = [], isFetching } = useEmployees();
-  const {
-    data: invites = [],
-    isFetching: loadingInvites,
-    isError: invitesError,
-    error: invitesLoadError,
-  } = useStaffInvites();
-  const createInvite = useCreateStaffInvite();
-  const revokeInvite = useRevokeStaffInvite();
   const createStaff = useCreateStaffMember();
   const updateStatus = useUpdateStaffStatus();
   const deleteStaff = useDeleteStaffMember();
@@ -83,14 +68,11 @@ export function EmployeesPage() {
   const notify = useNotificationStore((s) => s.add);
   const pendingAlerts = stockAlerts.filter((a) => !a.acknowledged_at);
 
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [inviteRole, setInviteRole] = useState<StaffRole>('WAITER');
-  const [inviteLabel, setInviteLabel] = useState('');
-  const [lastInviteUrl, setLastInviteUrl] = useState('');
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [role, setRole] = useState<StaffRole>('WAITER');
 
   if (!restaurantId) {
@@ -102,41 +84,27 @@ export function EmployeesPage() {
     );
   }
 
-  const handleCreateInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const invite = await createInvite.mutateAsync({ role: inviteRole, label: inviteLabel || undefined });
-      setLastInviteUrl(getJoinUrl(invite.code));
-      notify({
-        type: 'success',
-        title: t('employees.inviteCreated'),
-        message: t('employees.inviteCreatedMsg', { code: invite.code }),
-      });
-    } catch (err) {
-      notify({ type: 'error', title: t('common.error'), message: getErrorMessage(err) });
-    }
-  };
-
-  const copyLink = async (code: string) => {
-    await navigator.clipboard.writeText(getJoinUrl(code));
-    notify({ type: 'success', title: t('employees.linkCopied') });
-  };
-
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createStaff.mutateAsync({ name, role, phone: phone || undefined });
+      await createStaff.mutateAsync({
+        name,
+        role,
+        phone,
+        email: role === 'WAITER' || role === 'CASHIER' ? email : undefined,
+      });
       notify({ type: 'success', title: t('employees.staffAdded'), message: t('employees.staffAddedMsg', { name }) });
       setAddOpen(false);
       setName('');
       setPhone('');
+      setEmail('');
       setRole('WAITER');
     } catch (err) {
       notify({ type: 'error', title: t('common.error'), message: getErrorMessage(err) });
     }
   };
 
-  const pendingInvites = invites.filter((i) => !i.used_at && new Date(i.expires_at) > new Date());
+  const needsEmail = role === 'WAITER' || role === 'CASHIER';
 
   return (
     <div className="space-y-6">
@@ -149,80 +117,8 @@ export function EmployeesPage() {
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4" /> {t('employees.addStaff')}
           </Button>
-          <Button variant="secondary" onClick={() => setInviteOpen(true)}>
-            <Link2 className="h-4 w-4" /> {t('employees.inviteLink')}
-          </Button>
         </div>
       </div>
-
-      {invitesError && (
-        <Card className="border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/30">
-          <p className="font-medium text-red-800 dark:text-red-200">{t('employees.invitesUnavailable')}</p>
-          <p className="mt-1 text-sm text-red-700 dark:text-red-300">{getErrorMessage(invitesLoadError)}</p>
-        </Card>
-      )}
-
-      {lastInviteUrl && (
-        <Card className="border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30">
-          <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">{t('employees.latestInviteLink')}</p>
-          <p className="mt-1 break-all text-xs">{lastInviteUrl}</p>
-          <Button
-            size="sm"
-            className="mt-2"
-            variant="secondary"
-            onClick={() => {
-              void navigator.clipboard.writeText(lastInviteUrl);
-              notify({ type: 'success', title: t('employees.linkCopied') });
-            }}
-          >
-            <Copy className="h-3.5 w-3.5" /> {t('employees.copyLink')}
-          </Button>
-        </Card>
-      )}
-
-      {!loadingInvites && pendingInvites.length > 0 && (
-        <CollapsibleSection
-          title={t('employees.pendingInvites')}
-          defaultOpen={false}
-          badge={<Badge color="blue" size="sm">{pendingInvites.length}</Badge>}
-        >
-          <div className="overflow-x-auto">
-            <table className="table-compact min-w-[480px]">
-              <thead>
-                <tr>
-                  <th>{t('employees.code')}</th>
-                  <th>{t('employees.role')}</th>
-                  <th>{t('employees.expires')}</th>
-                  <th>{t('common.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingInvites.map((inv) => (
-                  <tr key={inv.id}>
-                    <td className="font-mono font-bold">{inv.code}</td>
-                    <td>
-                      <Badge color="blue" size="sm">{roleLabel(inv.role)}</Badge>
-                    </td>
-                    <td className="text-slate-500">
-                      {new Date(inv.expires_at).toLocaleDateString()}
-                    </td>
-                    <td>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="secondary" onClick={() => copyLink(inv.code)}>
-                          {t('employees.copy')}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => revokeInvite.mutate(inv.id)}>
-                          {t('employees.revoke')}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CollapsibleSection>
-      )}
 
       {pendingAlerts.length > 0 && (
         <CollapsibleSection
@@ -501,40 +397,16 @@ export function EmployeesPage() {
         </form>
       </Modal>
 
-      <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title={t('employees.createInviteTitle')}>
-        <form onSubmit={handleCreateInvite} className="space-y-4">
-          <p className="text-sm text-slate-500">{t('employees.inviteHint')}</p>
-          <Select
-            label={t('employees.role')}
-            value={inviteRole}
-            onChange={(e) => setInviteRole(e.target.value as StaffRole)}
-            options={[
-              { value: 'WAITER', label: t('employees.waiter') },
-              { value: 'KITCHEN', label: t('employees.kitchen') },
-              { value: 'CASHIER', label: t('employees.cashier') },
-            ]}
-          />
-          <Input
-            label={t('employees.labelOptional')}
-            value={inviteLabel}
-            onChange={(e) => setInviteLabel(e.target.value)}
-            placeholder={t('employees.labelPlaceholder')}
-          />
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setInviteOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button type="submit" loading={createInvite.isPending}>
-              {t('employees.generateLink')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title={t('employees.addMemberTitle')}>
         <form onSubmit={handleAddStaff} className="space-y-4">
+          <p className="text-sm text-slate-500">{t('employees.addMemberHint')}</p>
           <Input label={t('common.name')} value={name} onChange={(e) => setName(e.target.value)} required />
-          <Input label={t('employees.phoneOptional')} value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input
+            label={t('employees.phone')}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+          />
           <Select
             label={t('employees.role')}
             value={role}
@@ -545,6 +417,15 @@ export function EmployeesPage() {
               { value: 'CASHIER', label: t('employees.cashier') },
             ]}
           />
+          {needsEmail && (
+            <Input
+              label={t('auth.email')}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setAddOpen(false)}>
               {t('common.cancel')}

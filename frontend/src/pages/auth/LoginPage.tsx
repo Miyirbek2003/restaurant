@@ -95,14 +95,6 @@ export function LoginPage() {
           <Button type="submit" className="w-full" loading={login.isPending}>
             {t('auth.signInButton')}
           </Button>
-          {!onTerminal && (
-            <p className="text-center text-sm text-slate-500">
-              {t('auth.staffJoin')}{' '}
-              <a href="/join" className="text-primary-600 hover:underline">
-                {t('auth.joinInvite')}
-              </a>
-            </p>
-          )}
         </form>
       </div>
     </div>

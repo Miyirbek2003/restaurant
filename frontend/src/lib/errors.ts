@@ -13,7 +13,7 @@ export function getErrorMessage(error: unknown): string {
       ? String((error as { code: string }).code)
       : '';
 
-  if (code === '42P01' || /staff_invites|restaurant_staff|register_staff_from_invite|cash_register_closures/i.test(raw)) {
+  if (code === '42P01' || /staff_invites|restaurant_staff|register_staff_from_invite|manager_link_new_staff|cash_register_closures/i.test(raw)) {
     return t('errors.migration');
   }
   if (/row-level security/i.test(raw) || code === '42501') {
@@ -79,7 +79,13 @@ export function getErrorMessage(error: unknown): string {
   if (raw === 'CANNOT_ASSIGN_SUPER_ADMIN') {
     return t('errors.cannotAssignSuperAdmin');
   }
-  if (/already exists/i.test(raw)) {
+  if (raw === 'EMAIL_ALREADY_REGISTERED') {
+    return t('errors.userEmailExists');
+  }
+  if (raw === 'STAFF_EMAIL_CONFIRM_REQUIRED') {
+    return t('employees.staffEmailConfirmRequired');
+  }
+  if (/already exists|already registered/i.test(raw)) {
     return t('errors.userEmailExists');
   }
   if (/Insufficient stock/i.test(raw)) {
