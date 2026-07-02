@@ -10,6 +10,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { completePendingWaiterInviteIfNeeded } from '@/lib/staffInvite';
 import { clearPinWaiterSession } from '@/lib/waiterTerminal';
+import { activeSessionBlockReason } from '@/lib/staffLoginPolicy';
 import type { Profile } from '@/types';
 
 interface AuthContextValue {
@@ -87,6 +88,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadProfile(user.id);
   }, [user?.id, loadProfile]);
 
+  const signIn = useCallback(async (email: string, password: string) => {
+    clearPinWaiterSession();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  }, []);
+
+  const signOut = useCallback(async () => {
+    clearPinWaiterSession();
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    setProfile(null);
+    setAuthError(null);
+  }, []);
+
+  useEffect(() => {
+    if (!session || !profile || profileLoading) return;
+    const block = activeSessionBlockReason(profile.role);
+    if (!block) return;
+    console.warn('Staff session blocked:', block);
+    void signOut();
+  }, [session, profile, profileLoading, signOut]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -163,20 +186,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
     };
   }, [loadProfile]);
-
-  const signIn = useCallback(async (email: string, password: string) => {
-    clearPinWaiterSession();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-  }, []);
-
-  const signOut = useCallback(async () => {
-    clearPinWaiterSession();
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    setProfile(null);
-    setAuthError(null);
-  }, []);
 
   return (
     <AuthContext.Provider

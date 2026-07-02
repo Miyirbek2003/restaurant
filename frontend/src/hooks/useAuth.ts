@@ -3,9 +3,20 @@ import { useAuth as useAuthContext } from '@/contexts/AuthContext';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
-import { isCashier, isManager } from '@/lib/roles';
+import { isManager } from '@/lib/roles';
+import { staffLoginBlockMessage, staffLoginBlockReason } from '@/lib/staffLoginPolicy';
 import type { UserRole } from '@/types';
 import { t } from '@/i18n';
+
+async function fetchLoginRole(userId: string): Promise<UserRole | undefined> {
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return profile?.role as UserRole | undefined;
+}
 
 export function useLogin() {
   const { signIn, signOut, refreshProfile } = useAuthContext();
@@ -15,7 +26,7 @@ export function useLogin() {
     mutationFn: async (credentials: {
       email: string;
       password: string;
-      /** On a bound terminal, block waiter email login (PIN only). Managers/cashiers may use email. */
+      /** Password login opened from a bound in-restaurant terminal. */
       terminalEmailLogin?: boolean;
     }) => {
       await signIn(credentials.email, credentials.password);
@@ -25,29 +36,24 @@ export function useLogin() {
       const cashierDone = await completePendingCashierInviteIfNeeded();
       if (waiterDone || cashierDone) await refreshProfile();
 
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) throw new Error(t('auth.signIn'));
+
+      const role = await fetchLoginRole(user.id);
+
+      const staffBlock = staffLoginBlockReason(role);
+      if (staffBlock) {
+        await signOut();
+        throw new Error(staffLoginBlockMessage(staffBlock));
+      }
+
       if (credentials.terminalEmailLogin) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!user) {
+        if (!role || (!isManager(role) && role !== 'SUPER_ADMIN')) {
           await signOut();
-          throw new Error(t('terminal.staffEmailOnly'));
-        }
-
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .maybeSingle();
-        if (error) throw error;
-
-        const role = profile?.role as UserRole | undefined;
-        const allowed =
-          !!role && (isManager(role) || isCashier(role) || role === 'SUPER_ADMIN');
-        if (!allowed) {
-          await signOut();
-          throw new Error(t('terminal.staffEmailOnly'));
+          throw new Error(staffLoginBlockMessage('terminal_manager_only'));
         }
       }
     },

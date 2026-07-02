@@ -17,8 +17,13 @@ import {
   registerStaffFromInvite,
   savePendingWaiterInvite,
   savePendingCashierInvite,
-  isAlreadyRegisteredError,
 } from '@/lib/staffInvite';
+
+function generatedStaffPassword(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const base = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${base}Aa1!`;
+}
 
 type StatusBanner = { type: 'error' | 'info' | 'success'; title: string; message?: string };
 
@@ -30,7 +35,6 @@ export function JoinStaffPage() {
   const [code, setCode] = useState(params.get('code') ?? '');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<StatusBanner | null>(null);
@@ -75,30 +79,28 @@ export function JoinStaffPage() {
       return;
     }
 
+    if (!name.trim()) {
+      setStatus({ type: 'error', title: t('join.yourName') });
+      return;
+    }
+    if (!phone.trim()) {
+      setStatus({ type: 'error', title: t('join.phoneRequired') });
+      return;
+    }
+
     setSubmitting(true);
     try {
       if (needsEmailSignup) {
+        const staffPassword = generatedStaffPassword();
         const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
           email: email.trim(),
-          password,
-          options: { data: { name: name.trim() } },
+          password: staffPassword,
+          options: { data: { name: name.trim(), phone: phone.trim() } },
         });
 
         if (signUpErr) {
-          if (isAlreadyRegisteredError(signUpErr.message)) {
-            const { error: signInErr } = await supabase.auth.signInWithPassword({
-              email: email.trim(),
-              password,
-            });
-            if (signInErr) {
-              throw new Error(t('join.emailExists'));
-            }
-            if (isCashierInvite) {
-              await finishCashierJoin(inviteCode);
-            } else {
-              await finishWaiterJoin(inviteCode);
-            }
-            return;
+          if (/already registered|already exists|user_already_exists/i.test(signUpErr.message)) {
+            throw new Error(t('join.emailExists'));
           }
           throw signUpErr;
         }
@@ -199,25 +201,21 @@ export function JoinStaffPage() {
         <form onSubmit={handleRegister} className="space-y-4">
           <Input label={t('join.yourName')} value={name} onChange={(e) => setName(e.target.value)} required />
           {needsEmailSignup && (
-            <>
-              <Input
-                label={t('auth.email')}
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <Input
-                label={t('join.password')}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </>
+            <Input
+              label={t('auth.email')}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           )}
-          <Input label={t('join.phoneOptional')} value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input
+            label={t('join.phone')}
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+          />
           <Button
             type="submit"
             className="w-full"
