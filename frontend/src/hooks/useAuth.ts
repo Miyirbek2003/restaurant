@@ -3,7 +3,7 @@ import { useAuth as useAuthContext } from '@/contexts/AuthContext';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
-import { isManager } from '@/lib/roles';
+import { isCashier, isManager } from '@/lib/roles';
 import type { UserRole } from '@/types';
 import { t } from '@/i18n';
 
@@ -15,8 +15,8 @@ export function useLogin() {
     mutationFn: async (credentials: {
       email: string;
       password: string;
-      /** On a bound terminal, only managers may use email/password (not waiters). */
-      managerOnly?: boolean;
+      /** On a bound terminal, block waiter email login (PIN only). Managers/cashiers may use email. */
+      terminalEmailLogin?: boolean;
     }) => {
       await signIn(credentials.email, credentials.password);
       const { completePendingWaiterInviteIfNeeded, completePendingCashierInviteIfNeeded } =
@@ -25,23 +25,29 @@ export function useLogin() {
       const cashierDone = await completePendingCashierInviteIfNeeded();
       if (waiterDone || cashierDone) await refreshProfile();
 
-      if (credentials.managerOnly) {
+      if (credentials.terminalEmailLogin) {
         const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) throw new Error(t('terminal.managerOnly'));
+          data: { session },
+        } = await supabase.auth.getSession();
+        const user = session?.user;
+        if (!user) {
+          await signOut();
+          throw new Error(t('terminal.staffEmailOnly'));
+        }
 
         const { data: profile, error } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
         if (error) throw error;
 
         const role = profile?.role as UserRole | undefined;
-        if (!role || !isManager(role)) {
+        const allowed =
+          !!role && (isManager(role) || isCashier(role) || role === 'SUPER_ADMIN');
+        if (!allowed) {
           await signOut();
-          throw new Error(t('terminal.managerOnly'));
+          throw new Error(t('terminal.staffEmailOnly'));
         }
       }
     },

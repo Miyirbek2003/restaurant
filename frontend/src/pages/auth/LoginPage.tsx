@@ -31,7 +31,7 @@ export function LoginPage() {
     e.preventDefault();
     setLoginError(null);
     login.mutate(
-      { email, password, managerOnly: onTerminal },
+      { email, password, terminalEmailLogin: onTerminal },
       {
         onError: (err) => setLoginError(err instanceof Error ? err.message : String(err)),
       },

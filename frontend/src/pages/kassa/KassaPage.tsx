@@ -11,6 +11,7 @@ import { CloseCashRegisterModal } from '@/components/kassa/CloseCashRegisterModa
 import { KassaFactBreakdown } from '@/components/kassa/KassaFactBreakdown';
 import { SessionSoldItems } from '@/components/kassa/SessionSoldItems';
 import { SessionKassaExpenses } from '@/components/kassa/SessionKassaExpenses';
+import { SessionShortage } from '@/components/kassa/SessionShortage';
 import {
   useOpenCashRegisterSession,
   useCashRegisterSessions,
@@ -284,9 +285,6 @@ export function KassaPage() {
             {pagedSessions.map((s) => {
               const expectedTotal =
                 Number(s.expected_cash) + Number(s.expected_card) + Number(s.expected_click);
-              const factTotal =
-                Number(s.counted_cash ?? 0) + Number(s.counted_card ?? 0) + Number(s.counted_click ?? 0);
-              const shortage = s.status === 'CLOSED' ? expectedTotal - factTotal : 0;
 
               return (
                 <Card key={s.id} className="space-y-3 p-4 text-sm">
@@ -318,12 +316,8 @@ export function KassaPage() {
                         card={Number(s.counted_card ?? 0)}
                         click={Number(s.counted_click ?? 0)}
                       />
-                      {shortage > 0 && (
-                        <p className="text-right text-xs font-semibold text-red-600 dark:text-red-400">
-                          {t('kassa.shortage')}: {formatCurrency(shortage)}
-                        </p>
-                      )}
                       <SessionKassaExpenses sessionId={s.id} />
+                      <SessionShortage session={s} />
                       <SessionSoldItems sessionId={s.id} />
                     </>
                   )}

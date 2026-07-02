@@ -3,6 +3,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { t } from '@/i18n';
 
 const TERMINAL_KEY = 'waiter_terminal_config';
+const PIN_SESSION_KEY = 'waiter_pin_session';
 
 export type TerminalConfig = {
   terminalId: string;
@@ -39,6 +40,31 @@ export function clearTerminalConfig() {
 
 export function isWaiterTerminal(): boolean {
   return getTerminalConfig() !== null;
+}
+
+/** True when the current session was started via PIN (not email/password). */
+export function isPinWaiterSession(): boolean {
+  try {
+    return sessionStorage.getItem(PIN_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markPinWaiterSession(): void {
+  try {
+    sessionStorage.setItem(PIN_SESSION_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearPinWaiterSession(): void {
+  try {
+    sessionStorage.removeItem(PIN_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 async function callPinLoginFn(payload: Record<string, unknown>) {
@@ -121,4 +147,5 @@ export async function pinLogin(staffId: string, pin: string): Promise<void> {
     refresh_token: data.refresh_token,
   });
   if (error) throw error;
+  markPinWaiterSession();
 }

@@ -27,6 +27,7 @@ export type CashRegisterSession = {
   counted_click: number | null;
   closing_notes: string | null;
   orders_paid_count: number;
+  kassa_expenses_total?: number;
   created_at: string;
   opened_by_staff?: { name: string } | null;
   opened_by_profile?: { name: string } | null;
@@ -361,6 +362,7 @@ export function useCloseCashRegister() {
       countedCard: number;
       countedClick: number;
       closingNotes?: string;
+      kassaExpensesTotal?: number;
     }) => {
       const { data: session, error: sessionErr } = await supabase
         .from('cash_register_sessions')
@@ -394,6 +396,7 @@ export function useCloseCashRegister() {
           counted_click: body.countedClick,
           closing_notes: body.closingNotes || null,
           orders_paid_count: body.expected.count,
+          kassa_expenses_total: body.kassaExpensesTotal ?? 0,
         })
         .eq('id', body.sessionId)
         .eq('restaurant_id', restaurantId!)

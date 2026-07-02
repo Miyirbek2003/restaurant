@@ -9,6 +9,7 @@ import {
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { completePendingWaiterInviteIfNeeded } from '@/lib/staffInvite';
+import { clearPinWaiterSession } from '@/lib/waiterTerminal';
 import type { Profile } from '@/types';
 
 interface AuthContextValue {
@@ -163,17 +164,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [loadProfile]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
+    clearPinWaiterSession();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
+    clearPinWaiterSession();
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     setProfile(null);
     setAuthError(null);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider

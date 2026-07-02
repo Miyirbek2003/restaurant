@@ -10,6 +10,7 @@ import {
   type CashRegisterSession,
 } from '@/hooks/useCashRegister';
 import { KassaFactBreakdown } from '@/components/kassa/KassaFactBreakdown';
+import { sessionDrawerTotals } from '@/lib/kassaSession';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { formatCurrency } from '@/lib/utils';
 import { getErrorMessage } from '@/lib/errors';
@@ -59,7 +60,6 @@ export function CloseCashRegisterModal({
   const cashEntered = countedCash.trim() !== '';
   const expensesTotal = sessionExpenses.reduce((sum, row) => sum + Number(row.amount), 0);
   const expectedCashInDrawer = Math.max(0, (expected?.cash ?? 0) - expensesTotal);
-  const expectedTotalInDrawer = Math.max(0, (expected?.total ?? 0) - expensesTotal);
 
   const handleClose = () => {
     if (!expected) return;
@@ -75,6 +75,7 @@ export function CloseCashRegisterModal({
         countedCard: parseFloat(countedCard) || 0,
         countedClick: parseFloat(countedClick) || 0,
         closingNotes,
+        kassaExpensesTotal: expensesTotal,
       },
       {
         onSuccess: () => {
@@ -90,9 +91,19 @@ export function CloseCashRegisterModal({
   const factCard = parseFloat(countedCard) || 0;
   const factClick = parseFloat(countedClick) || 0;
   const factTotal = cashEntered ? factCash + factCard + factClick : 0;
-  const diff = cashEntered ? factTotal - expectedTotalInDrawer : 0;
-  const shortage = diff < 0 ? Math.abs(diff) : 0;
-  const excess = diff > 0 ? diff : 0;
+  const { shortage, excess } = cashEntered
+    ? sessionDrawerTotals(
+        {
+          expected_cash: expected?.cash ?? 0,
+          expected_card: (expected?.card ?? 0) + (expected?.mobile ?? 0),
+          expected_click: expected?.click ?? 0,
+          counted_cash: factCash,
+          counted_card: factCard,
+          counted_click: factClick,
+        },
+        expensesTotal,
+      )
+    : { shortage: 0, excess: 0 };
 
   return (
     <Modal open={open} onClose={onClose} title={t('kassa.closeTitle')}>
