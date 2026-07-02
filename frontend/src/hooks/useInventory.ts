@@ -460,6 +460,34 @@ export function useLinkProductToInventory() {
   });
 }
 
+export function useUnlinkProductFromInventory() {
+  const restaurantId = useRestaurantId();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (productId: string) => {
+      if (!restaurantId) throw new Error('No restaurant');
+
+      const { data: item, error: findErr } = await supabase
+        .from('inventory_items')
+        .select('id')
+        .eq('restaurant_id', restaurantId)
+        .eq('product_id', productId)
+        .maybeSingle();
+      if (findErr) throw findErr;
+      if (!item) throw new Error('NOT_ON_WAREHOUSE');
+
+      const { error } = await supabase.from('inventory_items').delete().eq('id', item.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['inventory_items'] });
+      void qc.invalidateQueries({ queryKey: ['warehouse-product-ids'] });
+      void qc.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
 export function useWarehouseProductIds() {
   const restaurantId = useRestaurantId();
   return useQuery({

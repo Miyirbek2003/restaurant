@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Pencil, Trash2, ArrowLeft, Package } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, ArrowLeft, Package, PackageMinus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -27,7 +27,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { formatSaleQuantity } from '@/lib/weight';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
-import { useWarehouseProductIds, useLinkProductToInventory } from '@/hooks/useInventory';
+import { useWarehouseProductIds, useLinkProductToInventory, useUnlinkProductFromInventory } from '@/hooks/useInventory';
 import { CategoryCardMenu } from '@/components/menu/CategoryCardMenu';
 import { t } from '@/i18n';
 
@@ -72,6 +72,7 @@ export function MenuPage() {
   const toggleCategory = useToggleCategory();
   const { data: warehouseProductIds } = useWarehouseProductIds();
   const linkToWarehouse = useLinkProductToInventory();
+  const unlinkFromWarehouse = useUnlinkProductFromInventory();
   const notify = useNotificationStore((s) => s.add);
 
   const [productOpen, setProductOpen] = useState(false);
@@ -294,6 +295,27 @@ export function MenuPage() {
     }
   };
 
+  const handleRemoveFromWarehouse = (p: ProductRow) => {
+    if (!window.confirm(t('menu.removeFromWarehouseConfirm', { name: p.name }))) return;
+    unlinkFromWarehouse.mutate(p.id, {
+      onSuccess: () => {
+        notify({ type: 'success', title: t('menu.removedFromWarehouse') });
+        if (editProductId === p.id) {
+          setProductOpen(false);
+          resetProductForm();
+        }
+      },
+      onError: (err) => {
+        const message = getErrorMessage(err);
+        notify({
+          type: 'error',
+          title: /not_on_warehouse/i.test(message) ? t('menu.notOnWarehouse') : t('common.error'),
+          message: /not_on_warehouse/i.test(message) ? undefined : message,
+        });
+      },
+    });
+  };
+
   const handleDeleteCategory = (cat: CategoryRow) => {
     if (!window.confirm(t('menu.deleteCategoryConfirm', { name: cat.name }))) {
       return;
@@ -499,6 +521,18 @@ export function MenuPage() {
                                   </Button>
                                 </>
                               )}
+                              {fromWarehouse && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 w-8 shrink-0 px-0"
+                                  onClick={() => handleRemoveFromWarehouse(p)}
+                                  disabled={unlinkFromWarehouse.isPending}
+                                  title={t('menu.removeFromWarehouse')}
+                                >
+                                  <PackageMinus className="h-3.5 w-3.5 text-amber-600" />
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -634,6 +668,20 @@ export function MenuPage() {
                   >
                     <Package className="h-4 w-4" />
                     {t('menu.addToWarehouse')}
+                  </Button>
+                )}
+                {editProductId && editingWarehouseProduct && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    loading={unlinkFromWarehouse.isPending}
+                    onClick={() => {
+                      const product = products.find((x) => x.id === editProductId);
+                      if (product) handleRemoveFromWarehouse(product as ProductRow);
+                    }}
+                  >
+                    <PackageMinus className="h-4 w-4" />
+                    {t('menu.removeFromWarehouse')}
                   </Button>
                 )}
                 <Button
