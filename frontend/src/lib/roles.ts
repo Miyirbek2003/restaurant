@@ -29,7 +29,15 @@ export const MANAGER_PATH_PREFIXES = [
   '/bookings',
 ] as const;
 
-export const CASHIER_PATH_PREFIXES = ['/cash-register', '/orders', '/tables'] as const;
+export const CASHIER_PATH_PREFIXES = [
+  '/cash-register',
+  '/orders',
+  '/tables',
+  '/menu',
+  '/bookings',
+  '/expenses',
+  '/incomes',
+] as const;
 
 export const MANAGER_ROUTE_ROLES: UserRole[] = ['MANAGER'];
 
@@ -42,7 +50,7 @@ const ROUTE_ACCESS: Record<UserRole, string[]> = {
   SUPER_ADMIN: ['/admin', '/dashboard'],
   MANAGER: [...MANAGER_PATH_PREFIXES],
   WAITER: ['/tables', '/orders', '/menu', '/bookings'],
-  CASHIER: [...MANAGER_PATH_PREFIXES],
+  CASHIER: [...CASHIER_PATH_PREFIXES],
   KITCHEN: [],
 };
 

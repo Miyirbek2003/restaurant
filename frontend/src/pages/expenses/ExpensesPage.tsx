@@ -48,6 +48,7 @@ type ExpenseForm = {
   date: string;
   notes: string;
   staff_id: string;
+  fromKassa: boolean;
 };
 
 const emptyForm = (): ExpenseForm => ({
@@ -57,6 +58,7 @@ const emptyForm = (): ExpenseForm => ({
   date: new Date().toISOString().slice(0, 10),
   notes: '',
   staff_id: '',
+  fromKassa: false,
 });
 
 export function ExpensesPage() {
@@ -109,6 +111,7 @@ export function ExpensesPage() {
         (openKassa.opened_by_staff_id && myStaffId && openKassa.opened_by_staff_id === myStaffId)),
   );
   const cashierCreateBlocked = Boolean(profile?.role === 'CASHIER' && openKassa && !isKassaOwner);
+  const canTakeFromKassa = Boolean(openKassa && isKassaOwner);
   useEffect(() => {
     setVisibleCount(pageSize);
   }, [filters.search, filters.dateFrom, filters.dateTo, filters.category]);
@@ -153,6 +156,10 @@ export function ExpensesPage() {
       notify({ type: 'warning', title: t('expenses.selectEmployee') });
       return;
     }
+    if (form.fromKassa && !canTakeFromKassa) {
+      notify({ type: 'warning', title: t('expenses.noOpenKassaForExpense') });
+      return;
+    }
     const body: Record<string, unknown> = {
       title: expenseTitle(form.title, form.category),
       category: form.category,
@@ -160,6 +167,7 @@ export function ExpensesPage() {
       date: form.date,
       notes: form.notes || null,
       staff_id: isSalary ? form.staff_id : null,
+      cash_register_session_id: form.fromKassa && openKassa ? openKassa.id : null,
     };
     try {
       await insert.mutateAsync(body);
@@ -219,7 +227,14 @@ export function ExpensesPage() {
               key={row.id}
               className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3"
             >
-              <p className="min-w-0 flex-1 font-semibold">{expenseListHeading(row)}</p>
+              <p className="min-w-0 flex-1 font-semibold">
+                {expenseListHeading(row)}
+                {row.cash_register_session_id && (
+                  <span className="ml-2 text-xs font-medium text-amber-600">
+                    {t('expenses.fromKassaBadge')}
+                  </span>
+                )}
+              </p>
               <p className="shrink-0 text-sm text-slate-500">
                 {row.category === 'SALARIES'
                   ? row.date
@@ -287,6 +302,20 @@ export function ExpensesPage() {
             required
           />
           <Input label={t('common.notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          {canTakeFromKassa && (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.fromKassa}
+                onChange={(e) => setForm({ ...form, fromKassa: e.target.checked })}
+                className="mt-0.5 rounded border-slate-300"
+              />
+              <span>
+                <span className="font-medium">{t('expenses.fromKassa')}</span>
+                <span className="mt-0.5 block text-slate-500">{t('expenses.fromKassaHint')}</span>
+              </span>
+            </label>
+          )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               {t('common.cancel')}

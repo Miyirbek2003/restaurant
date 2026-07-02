@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input';
 import {
   useCloseCashRegister,
   useOpenOrdersCount,
+  useSessionKassaExpenses,
   useSessionPaymentTotals,
   type CashRegisterSession,
 } from '@/hooks/useCashRegister';
@@ -12,7 +13,7 @@ import { KassaFactBreakdown } from '@/components/kassa/KassaFactBreakdown';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { formatCurrency } from '@/lib/utils';
 import { getErrorMessage } from '@/lib/errors';
-import { t } from '@/i18n';
+import { t, expenseCategory } from '@/i18n';
 
 type CloseCashRegisterModalProps = {
   open: boolean;
@@ -30,6 +31,10 @@ export function CloseCashRegisterModal({
   onError,
 }: CloseCashRegisterModalProps) {
   const { data: expected, isLoading } = useSessionPaymentTotals(session.id, session.opened_at);
+  const { data: sessionExpenses = [], isLoading: loadingExpenses } = useSessionKassaExpenses(
+    session.id,
+    open,
+  );
   const { data: openOrdersCount = 0 } = useOpenOrdersCount();
   const closeRegister = useCloseCashRegister();
   const notify = useNotificationStore((s) => s.add);
@@ -52,6 +57,9 @@ export function CloseCashRegisterModal({
   }, [open, expected]);
 
   const cashEntered = countedCash.trim() !== '';
+  const expensesTotal = sessionExpenses.reduce((sum, row) => sum + Number(row.amount), 0);
+  const expectedCashInDrawer = Math.max(0, (expected?.cash ?? 0) - expensesTotal);
+  const expectedTotalInDrawer = Math.max(0, (expected?.total ?? 0) - expensesTotal);
 
   const handleClose = () => {
     if (!expected) return;
@@ -81,9 +89,8 @@ export function CloseCashRegisterModal({
   const factCash = cashEntered ? parseFloat(countedCash) || 0 : 0;
   const factCard = parseFloat(countedCard) || 0;
   const factClick = parseFloat(countedClick) || 0;
-  const expectedTotal = expected?.total ?? 0;
   const factTotal = cashEntered ? factCash + factCard + factClick : 0;
-  const diff = cashEntered ? factTotal - expectedTotal : 0;
+  const diff = cashEntered ? factTotal - expectedTotalInDrawer : 0;
   const shortage = diff < 0 ? Math.abs(diff) : 0;
   const excess = diff > 0 ? diff : 0;
 
@@ -96,7 +103,7 @@ export function CloseCashRegisterModal({
           </div>
         )}
 
-        {isLoading || !expected ? (
+        {isLoading || loadingExpenses || !expected ? (
           <p className="text-sm text-slate-500">{t('common.loading')}</p>
         ) : (
           <>
@@ -120,6 +127,34 @@ export function CloseCashRegisterModal({
               </div>
               <p className="text-xs text-slate-500">{t('kassa.paymentsCount', { n: expected.count })}</p>
             </dl>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/30">
+              <p className="font-medium text-amber-900 dark:text-amber-100">{t('kassa.sessionExpenses')}</p>
+              {sessionExpenses.length === 0 ? (
+                <p className="mt-2 text-amber-800/80 dark:text-amber-200/80">{t('kassa.noSessionExpenses')}</p>
+              ) : (
+                <ul className="mt-2 space-y-1">
+                  {sessionExpenses.map((row) => (
+                    <li key={row.id} className="flex justify-between gap-3">
+                      <span className="min-w-0 truncate">
+                        {row.title || expenseCategory(row.category)}
+                      </span>
+                      <span className="shrink-0 tabular-nums font-medium text-red-600">
+                        −{formatCurrency(Number(row.amount))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-2 flex justify-between gap-4 border-t border-amber-200 pt-2 font-semibold dark:border-amber-900">
+                <span>{t('kassa.sessionExpensesTotal')}</span>
+                <span className="tabular-nums text-red-600">−{formatCurrency(expensesTotal)}</span>
+              </div>
+              <div className="mt-2 flex justify-between gap-4 font-semibold">
+                <span>{t('kassa.expectedCashAfterExpenses')}</span>
+                <span className="tabular-nums">{formatCurrency(expectedCashInDrawer)}</span>
+              </div>
+            </div>
 
             <p className="text-sm font-medium">{t('kassa.countedInDrawer')}</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

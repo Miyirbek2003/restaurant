@@ -30,7 +30,8 @@ import type { UserRole } from '@/types';
 import { getHomeForRole } from '@/lib/roles';
 import { useAuth } from '@/contexts/AuthContext';
 
-const managerOnly: UserRole[] = ['MANAGER', 'CASHIER'];
+const managerOnly: UserRole[] = ['MANAGER'];
+const managerAndCashier: UserRole[] = ['MANAGER', 'CASHIER'];
 const waiterOnly: UserRole[] = ['WAITER'];
 const waiterAndManager: UserRole[] = ['WAITER', 'MANAGER', 'CASHIER'];
 const cashierAndWaiterAndManager: UserRole[] = ['WAITER', 'MANAGER', 'CASHIER'];
@@ -70,7 +71,7 @@ export default function App() {
         <Route path="admin/restaurants" element={<ProtectedRoute roles={adminOnly}><RestaurantsPage /></ProtectedRoute>} />
         <Route path="admin/analytics" element={<ProtectedRoute roles={adminOnly}><AdminAnalyticsPage /></ProtectedRoute>} />
 
-        <Route path="menu" element={<ProtectedRoute roles={[...managerOnly, ...waiterOnly]}><MenuPage /></ProtectedRoute>} />
+        <Route path="menu" element={<ProtectedRoute roles={['MANAGER', 'WAITER', 'CASHIER']}><MenuPage /></ProtectedRoute>} />
         <Route path="menu/categories" element={<Navigate to="/menu" replace />} />
         <Route path="menu/products" element={<Navigate to="/menu" replace />} />
 
@@ -92,9 +93,9 @@ export default function App() {
         <Route path="kitchen" element={<Navigate to="/orders" replace />} />
 
         <Route path="inventory" element={<ProtectedRoute roles={managerOnly}><InventoryPage /></ProtectedRoute>} />
-        <Route path="expenses" element={<ProtectedRoute roles={managerOnly}><ExpensesPage /></ProtectedRoute>} />
+        <Route path="expenses" element={<ProtectedRoute roles={managerAndCashier}><ExpensesPage /></ProtectedRoute>} />
         <Route path="suppliers" element={<ProtectedRoute roles={managerOnly}><SuppliersPage /></ProtectedRoute>} />
-        <Route path="incomes" element={<ProtectedRoute roles={managerOnly}><IncomesPage /></ProtectedRoute>} />
+        <Route path="incomes" element={<ProtectedRoute roles={managerAndCashier}><IncomesPage /></ProtectedRoute>} />
         <Route path="salaries" element={<ProtectedRoute roles={managerOnly}><SalariesPage /></ProtectedRoute>} />
         <Route path="customers" element={<ProtectedRoute roles={managerOnly}><CustomersPage /></ProtectedRoute>} />
         <Route path="discounts" element={<ProtectedRoute roles={managerOnly}><DiscountsPage /></ProtectedRoute>} />

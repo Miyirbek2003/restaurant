@@ -68,7 +68,7 @@ const navGroups: NavGroup[] = [
     labelKey: 'nav.backOffice',
     roles: ['MANAGER', 'CASHIER'],
     items: [
-      { to: '/inventory', labelKey: 'nav.warehouse', icon: Package, roles: ['MANAGER', 'CASHIER'] },
+      { to: '/inventory', labelKey: 'nav.warehouse', icon: Package, roles: ['MANAGER'] },
       { to: '/expenses', labelKey: 'nav.expenses', icon: Receipt, roles: ['MANAGER', 'CASHIER'] },
       { to: '/incomes', labelKey: 'nav.incomes', icon: Banknote, roles: ['MANAGER', 'CASHIER'] },
       { to: '/cash-register', labelKey: 'nav.kassa', icon: Wallet, roles: ['MANAGER', 'CASHIER'] },

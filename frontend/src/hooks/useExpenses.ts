@@ -12,6 +12,7 @@ export type ExpenseRow = {
   receipt_url: string | null;
   notes: string | null;
   staff_id: string | null;
+  cash_register_session_id: string | null;
   created_at: string;
   staff: { id: string; name: string } | null;
 };

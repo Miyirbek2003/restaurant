@@ -38,7 +38,10 @@ export function useResourceInsert(table: ResourceTable) {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [table] });
-      if (table === 'expenses') void qc.invalidateQueries({ queryKey: ['salaries'] });
+      if (table === 'expenses') {
+        void qc.invalidateQueries({ queryKey: ['salaries'] });
+        void qc.invalidateQueries({ queryKey: ['cash-register-session-expenses'] });
+      }
     },
   });
 }

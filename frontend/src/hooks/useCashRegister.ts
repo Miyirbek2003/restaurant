@@ -241,6 +241,34 @@ export function useSessionSoldItems(sessionId: string | undefined, enabled: bool
   });
 }
 
+export type KassaExpenseRow = {
+  id: string;
+  title: string;
+  amount: number;
+  date: string;
+  category: string;
+  notes: string | null;
+};
+
+export function useSessionKassaExpenses(sessionId: string | undefined, enabled = true) {
+  const restaurantId = useRestaurantId();
+
+  return useQuery({
+    queryKey: ['cash-register-session-expenses', sessionId],
+    enabled: !!restaurantId && !!sessionId && enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('id, title, amount, date, category, notes')
+        .eq('restaurant_id', restaurantId!)
+        .eq('cash_register_session_id', sessionId!)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as KassaExpenseRow[];
+    },
+  });
+}
+
 export function useOpenOrdersCount() {
   const restaurantId = useRestaurantId();
 

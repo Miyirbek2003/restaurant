@@ -552,7 +552,10 @@ export const ru = {
     readOnlyNotice: 'Добавленные расходы нельзя изменить или удалить.',
     employee: 'Сотрудник',
     chooseEmployee: 'Выберите сотрудника',
-    selectEmployee: 'Выберите сотрудника для зарплаты',
+    fromKassa: 'Снято из текущей кассы',
+    fromKassaHint: 'Отметьте, если сумма взята наличными из кассового ящика текущей смены.',
+    fromKassaBadge: 'Из кассы',
+    noOpenKassaForExpense: 'Чтобы снять деньги из кассы, сначала откройте смену.',
     salaryTitle: 'Зарплата: {name}',
     cat: {
       RENT: 'Аренда',
@@ -695,7 +698,7 @@ export const ru = {
     activate: 'Показать',
     uncategorized: 'Без категории',
     deleteProductConfirm:
-      'Удалить блюдо «{name}» навсегда? В старых заказах название сохранится, из меню исчезнет.',
+      'Удалить блюдо «{name}» навсегда? В старых заказах название сохранится, из меню исчезнет.', 
     deleteCategoryConfirm:
       'Удалить категорию «{name}» и все блюда в ней навсегда? В старых заказах названия сохранятся.',
     showOnMenu: 'Показать в меню',
@@ -964,6 +967,10 @@ export const ru = {
     itemName: 'Товар',
     soldQty: 'Продано',
     inStock: 'На складе',
+    sessionExpenses: 'Расходы из кассы',
+    sessionExpensesTotal: 'Снято из кассы за смену',
+    noSessionExpenses: 'Нет расходов из кассы за смену',
+    expectedCashAfterExpenses: 'Ожидаемые наличные в ящике',
   },
   errors: {
     unexpected: 'Произошла непредвиденная ошибка',
