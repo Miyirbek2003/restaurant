@@ -444,6 +444,10 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
 
   const handleOpenPay = () => {
     if (viewOnly) return;
+    if (dirty) {
+      notify({ type: 'warning', title: t('orderDetail.unsaved') });
+      return;
+    }
     if (!openKassa) {
       notify({ type: 'warning', title: t('kassa.mustOpenFirst') });
       return;
@@ -593,14 +597,14 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
           <Button
             variant="secondary"
             className="w-full"
-            disabled={!bill}
+            disabled={!bill || dirty}
             onClick={() => bill && handlePrintCheck(bill)}
           >
             {t('payModal.printCheck')}
           </Button>
           <Button
             className="w-full"
-            disabled={Boolean(openKassa && !isKassaOwnerEdit)}
+            disabled={dirty || Boolean(openKassa && !isKassaOwnerEdit)}
             onClick={handleOpenPay}
           >
             {t('orders.pay')}
@@ -895,6 +899,7 @@ export function CreateOrderPage({ orderId }: CreateOrderPageProps = {}) {
           loading={closeOrder.isPending}
           onConfirm={confirmPay}
           onPrintCheck={handlePrintCheck}
+          disablePrintCheck={dirty}
         />
       )}
     </div>
