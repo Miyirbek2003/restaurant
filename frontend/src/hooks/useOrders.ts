@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRestaurantId, useAuth } from '@/contexts/AuthContext';
 import { isCashier, isManager, isWaiter } from '@/lib/roles';
@@ -53,23 +53,65 @@ async function deductOrderLines(lines: { product_id: string; quantity: number }[
   await deductOrderStock(lines);
 }
 
-const orderSelect = `
+const orderListSelect = `
+  id,
+  restaurant_id,
+  table_id,
+  staff_id,
+  order_number,
+  status,
+  notes,
+  subtotal,
+  discount_amount,
+  tax_amount,
+  total,
+  sent_to_kitchen_at,
+  paid_at,
+  created_at,
+  updated_at,
+  stock_deducted,
+  tables(name, charge_type, charge_amount),
+  staff:restaurant_staff(name, role),
+  order_items(id, quantity, unit_price, products(name, sale_unit))
+`;
+
+const orderDetailSelect = `
   *,
   tables(name, charge_type, charge_amount),
   staff:restaurant_staff(name, role),
   order_items(*, products(name, sale_unit))
 `;
 
+function singleOrNull<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function normalizeOrderRelations<T extends { tables?: unknown; staff?: unknown; order_items?: unknown[] }>(
+  row: T,
+) {
+  const orderItems = ((row.order_items ?? []) as Array<{ products?: unknown }>).map((item) => ({
+    ...item,
+    products: singleOrNull(item.products),
+  }));
+  return {
+    ...row,
+    tables: singleOrNull(row.tables),
+    staff: singleOrNull(row.staff),
+    order_items: orderItems,
+  };
+}
+
 export function useOrders(status?: OrderStatus) {
   const restaurantId = useRestaurantId();
 
-  const query = useQuery({
+  const query = useQuery<any[]>({
     queryKey: ['orders', restaurantId, status],
     enabled: !!restaurantId,
-    queryFn: async () => {
+    queryFn: async (): Promise<any[]> => {
       let q = supabase
         .from('orders')
-        .select(orderSelect)
+        .select(orderListSelect)
         .eq('restaurant_id', restaurantId!)
         .order('created_at', { ascending: false })
         .limit(200);
@@ -78,7 +120,7 @@ export function useOrders(status?: OrderStatus) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return data;
+      return (data ?? []).map((row) => normalizeOrderRelations(row)) as any[];
     },
   });
 
@@ -90,18 +132,18 @@ export function useOrders(status?: OrderStatus) {
 export function useKitchenQueue() {
   const restaurantId = useRestaurantId();
 
-  const query = useQuery({
+  const query = useQuery<any[]>({
     queryKey: ['kitchen-queue', restaurantId],
     enabled: !!restaurantId,
-    queryFn: async () => {
+    queryFn: async (): Promise<any[]> => {
       const { data, error } = await supabase
         .from('orders')
-        .select(orderSelect)
+        .select(orderListSelect)
         .eq('restaurant_id', restaurantId!)
         .in('status', ['NEW', 'PREPARING', 'READY'])
         .order('sent_to_kitchen_at', { ascending: true });
       if (error) throw error;
-      return data;
+      return (data ?? []).map((row) => normalizeOrderRelations(row)) as any[];
     },
   });
 
@@ -111,6 +153,13 @@ export function useKitchenQueue() {
 }
 
 function useRealtimeOrders(restaurantId: string | null, onUpdate: () => void) {
+  const onUpdateRef = useRef(onUpdate);
+  const refetchTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+
   useEffect(() => {
     if (!restaurantId) return;
 
@@ -119,19 +168,35 @@ function useRealtimeOrders(restaurantId: string | null, onUpdate: () => void) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restaurantId}` },
-        onUpdate,
+        () => {
+          if (refetchTimerRef.current) window.clearTimeout(refetchTimerRef.current);
+          refetchTimerRef.current = window.setTimeout(() => {
+            refetchTimerRef.current = null;
+            onUpdateRef.current();
+          }, 180);
+        },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'order_items', filter: `restaurant_id=eq.${restaurantId}` },
-        onUpdate,
+        () => {
+          if (refetchTimerRef.current) window.clearTimeout(refetchTimerRef.current);
+          refetchTimerRef.current = window.setTimeout(() => {
+            refetchTimerRef.current = null;
+            onUpdateRef.current();
+          }, 180);
+        },
       )
       .subscribe();
 
     return () => {
+      if (refetchTimerRef.current) {
+        window.clearTimeout(refetchTimerRef.current);
+        refetchTimerRef.current = null;
+      }
       supabase.removeChannel(channel);
     };
-  }, [restaurantId, onUpdate]);
+  }, [restaurantId]);
 }
 
 export function useCreateOrder() {
@@ -159,7 +224,7 @@ export function useCreateOrder() {
           notes: body.notes ?? null,
           status: 'DRAFT',
         })
-        .select(orderSelect)
+        .select(orderDetailSelect)
         .single();
 
       if (error) throw error;
@@ -168,7 +233,7 @@ export function useCreateOrder() {
         await updateTableStatus(body.table_id, 'OCCUPIED');
       }
 
-      return data;
+      return normalizeOrderRelations(data);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] });
@@ -345,10 +410,10 @@ export function useUpdateOrderStatus() {
         .from('orders')
         .update(updates)
         .eq('id', id)
-        .select(orderSelect)
+        .select(orderDetailSelect)
         .single();
       if (error) throw error;
-      return data;
+      return normalizeOrderRelations(data);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] });
@@ -556,17 +621,17 @@ export function useRemoveOrderItem() {
 
 export function useOrder(orderId: string | undefined) {
   const restaurantId = useRestaurantId();
-  return useQuery({
+  return useQuery<any>({
     queryKey: ['order', orderId],
     enabled: !!orderId && !!restaurantId,
-    queryFn: async () => {
+    queryFn: async (): Promise<any> => {
       const { data, error } = await supabase
         .from('orders')
-        .select(orderSelect)
+        .select(orderDetailSelect)
         .eq('id', orderId!)
         .single();
       if (error) throw error;
-      return data;
+      return normalizeOrderRelations(data);
     },
   });
 }
@@ -653,24 +718,33 @@ export function useCreateOrderWithItems() {
         await updateTableStatus(body.table_id, 'OCCUPIED');
       }
 
-      for (const line of body.items) {
-        const { data: product, error: pErr } = await supabase
+      if (body.items.length > 0) {
+        const productIds = [...new Set(body.items.map((line) => line.product_id))];
+        const { data: productRows, error: pErr } = await supabase
           .from('products')
-          .select('price, tax_rate, name')
-          .eq('id', line.product_id)
-          .single();
+          .select('id, price, tax_rate, name')
+          .in('id', productIds);
         if (pErr) throw pErr;
 
-        const { error: iErr } = await supabase.from('order_items').insert({
-          restaurant_id: restaurantId!,
-          order_id: order.id,
-          product_id: line.product_id,
-          product_name: product.name,
-          quantity: line.quantity,
-          kitchen_qty: body.sendToKitchen ? line.quantity : 0,
-          unit_price: product.price,
-          tax_rate: product.tax_rate,
+        const productsById = new Map((productRows ?? []).map((p) => [p.id, p]));
+        const orderItemRows = body.items.map((line) => {
+          const product = productsById.get(line.product_id);
+          if (!product) {
+            throw new Error(`PRODUCT_NOT_FOUND:${line.product_id}`);
+          }
+          return {
+            restaurant_id: restaurantId!,
+            order_id: order.id,
+            product_id: line.product_id,
+            product_name: product.name,
+            quantity: line.quantity,
+            kitchen_qty: body.sendToKitchen ? line.quantity : 0,
+            unit_price: product.price,
+            tax_rate: product.tax_rate,
+          };
         });
+
+        const { error: iErr } = await supabase.from('order_items').insert(orderItemRows);
         if (iErr) throw iErr;
       }
 
@@ -679,13 +753,24 @@ export function useCreateOrderWithItems() {
 
       const { data: full, error: fErr } = await supabase
         .from('orders')
-        .select(orderSelect)
+        .select(orderDetailSelect)
         .eq('id', order.id)
         .single();
       if (fErr) throw fErr;
-      return full;
+      return normalizeOrderRelations(full);
     },
-    onSuccess: () => invalidateOrderQueries(qc),
+    onSuccess: (_data, vars) => {
+      // Create flow should refresh order/table state, but avoid expensive global invalidation.
+      void qc.invalidateQueries({ queryKey: ['orders'] });
+      void qc.invalidateQueries({ queryKey: ['kitchen-queue'] });
+      void qc.invalidateQueries({ queryKey: ['tables-with-waiters'] });
+      void qc.invalidateQueries({ queryKey: ['tables'] });
+      void qc.invalidateQueries({ queryKey: ['table-ids-open-orders'] });
+      void qc.invalidateQueries({ queryKey: ['open-orders-count'] });
+      if (vars.sendToKitchen) {
+        void qc.invalidateQueries({ queryKey: ['stock-alerts'] });
+      }
+    },
   });
 }
 
@@ -740,17 +825,17 @@ export function useCloseOrder() {
         if (!isOwner) throw new Error('CASH_REGISTER_OPENED_BY_ANOTHER_CASHIER');
       }
 
-      for (const line of lines) {
-        const { error: payErr } = await supabase.from('payments').insert({
+      const { error: payErr } = await supabase.from('payments').insert(
+        lines.map((line) => ({
           restaurant_id: restaurantId!,
           order_id: orderId,
           amount: line.amount,
           method: line.method,
           status: 'COMPLETED',
           cash_register_session_id: cashRegisterSessionId ?? null,
-        });
-        if (payErr) throw payErr;
-      }
+        })),
+      );
+      if (payErr) throw payErr;
 
       const { data, error } = await supabase
         .from('orders')
@@ -761,7 +846,7 @@ export function useCloseOrder() {
           tax_amount: 0,
         })
         .eq('id', orderId)
-        .select(orderSelect)
+        .select(orderDetailSelect)
         .single();
       if (error) throw error;
 
@@ -769,7 +854,7 @@ export function useCloseOrder() {
         await updateTableStatus(tableId, 'FREE');
       }
 
-      return data;
+      return normalizeOrderRelations(data);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] });

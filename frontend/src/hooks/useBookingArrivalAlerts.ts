@@ -28,7 +28,7 @@ export function useBookingArrivalAlerts() {
   const restaurantId = useRestaurantId();
   const notify = useNotificationStore((s) => s.add);
   const enabled = Boolean(restaurantId && canCreateOrders(profile?.role));
-  const { data: bookings = [], isSuccess } = useScheduledBookingsAlerts();
+  const { data: bookings = [], isSuccess } = useScheduledBookingsAlerts(enabled);
   const [tick, setTick] = useState(0);
 
   const watch = enabled && bookings.length > 0 && shouldWatchBookings(bookings);

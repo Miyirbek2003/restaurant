@@ -9,6 +9,7 @@ export type TableChargeType = 'NONE' | 'HOURLY' | 'ONE_TIME';
 
 export function useTables() {
   const restaurantId = useRestaurantId();
+  const qc = useQueryClient();
 
   const query = useQuery({
     queryKey: ['tables', restaurantId],
@@ -31,13 +32,13 @@ export function useTables() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tables', filter: `restaurant_id=eq.${restaurantId}` },
-        () => void query.refetch(),
+        () => void qc.invalidateQueries({ queryKey: ['tables', restaurantId] }),
       )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [restaurantId, query]);
+  }, [restaurantId, qc]);
 
   return query;
 }

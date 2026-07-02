@@ -12,15 +12,15 @@ export type ScheduledBookingAlertRow = {
   customerPhone: string | null;
 };
 
-export function useScheduledBookingsAlerts() {
+export function useScheduledBookingsAlerts(enabled = true) {
   const restaurantId = useRestaurantId();
 
   return useQuery({
     queryKey: ['table-bookings-scheduled-alerts', restaurantId],
-    enabled: Boolean(restaurantId),
+    enabled: Boolean(restaurantId) && enabled,
     retry: 1,
-    refetchInterval: 15_000,
-    refetchOnWindowFocus: true,
+    refetchInterval: enabled ? 15_000 : false,
+    refetchOnWindowFocus: enabled,
     queryFn: async (): Promise<ScheduledBookingAlertRow[]> => {
       const { data, error } = await supabase
         .from('table_bookings')
