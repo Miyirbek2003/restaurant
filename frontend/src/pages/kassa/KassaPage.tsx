@@ -10,6 +10,7 @@ import { RestaurantRequired } from '@/components/RestaurantRequired';
 import { CloseCashRegisterModal } from '@/components/kassa/CloseCashRegisterModal';
 import { KassaFactBreakdown } from '@/components/kassa/KassaFactBreakdown';
 import { SessionSoldItems } from '@/components/kassa/SessionSoldItems';
+import { SessionKassaExpenses } from '@/components/kassa/SessionKassaExpenses';
 import {
   useOpenCashRegisterSession,
   useCashRegisterSessions,
@@ -322,6 +323,7 @@ export function KassaPage() {
                           {t('kassa.shortage')}: {formatCurrency(shortage)}
                         </p>
                       )}
+                      <SessionKassaExpenses sessionId={s.id} />
                       <SessionSoldItems sessionId={s.id} />
                     </>
                   )}

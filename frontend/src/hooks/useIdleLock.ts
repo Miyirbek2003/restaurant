@@ -1,20 +1,22 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { isWaiter } from '@/lib/roles';
 import { isWaiterTerminal } from '@/lib/waiterTerminal';
 
 const IDLE_MS = 2 * 60 * 1000; // 2 minutes of inactivity locks the terminal
 
 /**
  * On a bound waiter terminal, sign the active waiter out after a period of
- * inactivity so the next person must re-enter their own PIN. No-op on ordinary
- * manager/cashier monitors.
+ * inactivity so the next person must re-enter their own PIN. Managers and
+ * cashiers stay signed in; only waiters are auto-locked.
  */
 export function useIdleLock() {
-  const { session, signOut } = useAuth();
+  const { session, profile, signOut } = useAuth();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!session || !isWaiterTerminal()) return;
+    const role = profile?.role;
+    if (!session || !isWaiterTerminal() || !role || !isWaiter(role)) return;
 
     const reset = () => {
       if (timer.current) clearTimeout(timer.current);
@@ -37,5 +39,5 @@ export function useIdleLock() {
       if (timer.current) clearTimeout(timer.current);
       events.forEach((e) => window.removeEventListener(e, reset));
     };
-  }, [session, signOut]);
+  }, [session, profile?.role, signOut]);
 }
