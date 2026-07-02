@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Pencil, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, ArrowLeft, Package } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -27,7 +27,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { formatSaleQuantity } from '@/lib/weight';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getErrorMessage } from '@/lib/errors';
-import { useWarehouseProductIds } from '@/hooks/useInventory';
+import { useWarehouseProductIds, useLinkProductToInventory } from '@/hooks/useInventory';
 import { CategoryCardMenu } from '@/components/menu/CategoryCardMenu';
 import { t } from '@/i18n';
 
@@ -71,6 +71,7 @@ export function MenuPage() {
   const deleteCategory = useDeleteCategory();
   const toggleCategory = useToggleCategory();
   const { data: warehouseProductIds } = useWarehouseProductIds();
+  const linkToWarehouse = useLinkProductToInventory();
   const notify = useNotificationStore((s) => s.add);
 
   const [productOpen, setProductOpen] = useState(false);
@@ -279,6 +280,20 @@ export function MenuPage() {
     });
   };
 
+  const handleAddToWarehouse = async (p: ProductRow) => {
+    try {
+      await linkToWarehouse.mutateAsync(p.id);
+      notify({ type: 'success', title: t('menu.addedToWarehouse') });
+    } catch (err) {
+      const message = getErrorMessage(err);
+      notify({
+        type: 'error',
+        title: /already_linked/i.test(message) ? t('menu.alreadyOnWarehouse') : t('common.error'),
+        message: /already_linked/i.test(message) ? undefined : message,
+      });
+    }
+  };
+
   const handleDeleteCategory = (cat: CategoryRow) => {
     if (!window.confirm(t('menu.deleteCategoryConfirm', { name: cat.name }))) {
       return;
@@ -460,17 +475,29 @@ export function MenuPage() {
                           {canEdit && (
                             <div className="ml-auto flex items-center gap-0.5">
                               {!fromWarehouse && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-8 w-8 shrink-0 px-0"
-                                  onClick={() =>
-                                    updateProduct.mutate({ id: p.id, is_active: !p.is_active })
-                                  }
-                                  title={p.is_active ? t('common.off') : t('common.on')}
-                                >
-                                  {p.is_active ? t('common.off') : t('common.on')}
-                                </Button>
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 shrink-0 px-0"
+                                    onClick={() => void handleAddToWarehouse(p)}
+                                    disabled={linkToWarehouse.isPending}
+                                    title={t('menu.addToWarehouse')}
+                                  >
+                                    <Package className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 shrink-0 px-0"
+                                    onClick={() =>
+                                      updateProduct.mutate({ id: p.id, is_active: !p.is_active })
+                                    }
+                                    title={p.is_active ? t('common.off') : t('common.on')}
+                                  >
+                                    {p.is_active ? t('common.off') : t('common.on')}
+                                  </Button>
+                                </>
                               )}
                               <Button
                                 size="sm"
@@ -594,7 +621,21 @@ export function MenuPage() {
                   onChange={(e) => setPStock(e.target.value)}
                 />
               )}
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
+                {editProductId && !editingWarehouseProduct && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    loading={linkToWarehouse.isPending}
+                    onClick={() => {
+                      const product = products.find((x) => x.id === editProductId);
+                      if (product) void handleAddToWarehouse(product as ProductRow);
+                    }}
+                  >
+                    <Package className="h-4 w-4" />
+                    {t('menu.addToWarehouse')}
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="ghost"

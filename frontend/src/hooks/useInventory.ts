@@ -410,6 +410,56 @@ export function useInventoryTransaction() {
   });
 }
 
+export function useLinkProductToInventory() {
+  const restaurantId = useRestaurantId();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (productId: string) => {
+      if (!restaurantId) throw new Error('No restaurant');
+
+      const { data: existing } = await supabase
+        .from('inventory_items')
+        .select('id')
+        .eq('restaurant_id', restaurantId)
+        .eq('product_id', productId)
+        .maybeSingle();
+      if (existing) throw new Error('ALREADY_LINKED');
+
+      const { data: product, error: pErr } = await supabase
+        .from('products')
+        .select('id, name, price, cost_price, stock_quantity, image_url, category_id, sale_unit')
+        .eq('id', productId)
+        .eq('restaurant_id', restaurantId)
+        .single();
+      if (pErr) throw pErr;
+
+      const unit = product.sale_unit === 'KG' ? 'KG' : 'PIECE';
+      const quantity = stockQtyFromInventory(Number(product.stock_quantity), unit);
+
+      const { error } = await supabase.from('inventory_items').insert({
+        restaurant_id: restaurantId,
+        name: product.name,
+        unit,
+        item_type: 'SALE',
+        quantity,
+        minimum_quantity: 0,
+        cost_per_unit: Number(product.cost_price) || 0,
+        selling_price: Number(product.price) || 0,
+        image_url: product.image_url,
+        category_id: product.category_id,
+        product_id: product.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['inventory_items'] });
+      void qc.invalidateQueries({ queryKey: ['warehouse-product-ids'] });
+      void qc.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
 export function useWarehouseProductIds() {
   const restaurantId = useRestaurantId();
   return useQuery({
