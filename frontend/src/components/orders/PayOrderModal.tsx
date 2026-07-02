@@ -41,6 +41,7 @@ type PayOrderModalProps = {
   loading?: boolean;
   onConfirm: (grandTotal: number, payments: PaymentLine[], bill: OrderBill) => void;
   onPrintCheck?: (bill: OrderBill) => void;
+  disablePrintCheck?: boolean;
 };
 
 /** Elapsed time since the order opened, rounded up to the next half hour (min 1h). */
@@ -77,6 +78,7 @@ export function PayOrderModal({
   loading,
   onConfirm,
   onPrintCheck,
+  disablePrintCheck = false,
 }: PayOrderModalProps) {
   const { data: serviceRate, isLoading: serviceRateLoading } = useServiceChargeRate();
   const resolvedServiceRate = serviceRate ?? (serviceRateLoading ? DEFAULT_SERVICE_FEE_RATE : 0);
@@ -337,7 +339,12 @@ export function PayOrderModal({
           {t('common.cancel')}
         </Button>
         {onPrintCheck && (
-          <Button type="button" variant="secondary" onClick={() => onPrintCheck?.(bill)} disabled={loading}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onPrintCheck?.(bill)}
+            disabled={loading || disablePrintCheck}
+          >
             {t('payModal.printCheck')}
           </Button>
         )}

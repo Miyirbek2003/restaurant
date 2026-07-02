@@ -569,6 +569,7 @@ export function OrderEditView({
         loading={closeOrder.isPending}
         onConfirm={confirmPay}
         onPrintCheck={handlePrintCheck}
+        disablePrintCheck={dirty}
       />
     </div>
   );
