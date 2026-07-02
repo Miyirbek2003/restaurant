@@ -32,7 +32,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const managerOnly: UserRole[] = ['MANAGER'];
 const managerAndCashier: UserRole[] = ['MANAGER', 'CASHIER'];
-const waiterOnly: UserRole[] = ['WAITER'];
+// const waiterOnly: UserRole[] = ['WAITER'];
 const waiterAndManager: UserRole[] = ['WAITER', 'MANAGER', 'CASHIER'];
 const cashierAndWaiterAndManager: UserRole[] = ['WAITER', 'MANAGER', 'CASHIER'];
 const cashierAndManager: UserRole[] = ['CASHIER', 'MANAGER', 'SUPER_ADMIN'];
